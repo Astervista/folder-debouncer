@@ -1,0 +1,62 @@
+{
+  "$ref": "#/definitions/ConfigJSON",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ConfigJSON": {
+      "additionalProperties": false,
+      "properties": {
+        "commitTriggers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "ignore": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "linkFolder": {
+          "type": "string"
+        },
+        "outputFolder": {
+          "type": "string"
+        },
+        "watch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "required": [
+        "linkFolder",
+        "outputFolder"
+      ],
+      "type": "object"
+    }
+  }
+}
+
