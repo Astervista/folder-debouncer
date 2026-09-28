@@ -1,62 +1,69 @@
 {
-  "$ref": "#/definitions/ConfigJSON",
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "definitions": {
-    "ConfigJSON": {
-      "additionalProperties": false,
-      "properties": {
-        "commitTriggers": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          ]
-        },
-        "ignore": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          ]
-        },
-        "linkFolder": {
+  "$id": "https://unpkg.com/folder-debouncer/config.schema.json",
+  "title": "folder-debouncer configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "linkFolder",
+    "outputFolder"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference, for editor support."
+    },
+    "linkFolder": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The source folder to mirror. Relative paths are resolved from the folder containing this config file."
+    },
+    "outputFolder": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Where the mirror is created. Relative paths are resolved from the folder containing this config file. It must not overlap the link folder. Its contents are deleted on start (after asking) and the folder is removed on exit."
+    },
+    "watch": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "outputFolder": {
-          "type": "string"
-        },
-        "watch": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          ]
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
-      },
-      "required": [
-        "linkFolder",
-        "outputFolder"
       ],
-      "type": "object"
+      "description": "Files or folders (relative to linkFolder) that are copied instead of symlinked. Changes to them are held back until a commit trigger changes or a flush is forced."
+    },
+    "commitTriggers": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ],
+      "description": "Files (relative to linkFolder) that flush all pending changes whenever they are created, modified or deleted."
+    },
+    "ignore": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ],
+      "description": "Files or folders (relative to linkFolder) that are left out of the mirror and never watched."
     }
   }
 }
-

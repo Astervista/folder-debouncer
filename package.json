@@ -1,17 +1,47 @@
 {
   "name": "folder-debouncer",
   "version": "1.1.0",
-  "description": "",
+  "description": "Mirror a folder elsewhere, holding back changes until a trigger file says the build is done. macOS (FSEvents).",
+  "keywords": [
+    "debounce",
+    "watch",
+    "watcher",
+    "fsevents",
+    "mirror",
+    "symlink",
+    "build",
+    "dev-server",
+    "cli",
+    "macos"
+  ],
+  "license": "MIT",
+  "author": "Astervista",
+  "bin": {
+    "folder-debouncer": "dist/index.js"
+  },
   "main": "dist/index.js",
+  "files": [
+    "dist",
+    "watcher/watcher",
+    "watcher/watcher.c",
+    "config.schema.json"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "build": "tsc"
+    "build": "npm run build:ts && npm run build:watcher",
+    "build:ts": "rm -rf dist && tsc",
+    "build:watcher": "clang -O2 -Wall -Wextra -Wno-unused-parameter -arch arm64 -arch x86_64 -mmacosx-version-min=10.15 -framework CoreServices -o watcher/watcher watcher/watcher.c",
+    "test": "npm run build && node --test test/*.test.js",
+    "example": "npm run build && node dist/index.js example/debouncer.json",
+    "prepack": "npm run build"
   },
   "devDependencies": {
-    "graceful-fs": "^4.2.11",
+    "@types/node": "^18.19.0",
     "typescript": "^5.5.3"
-  },
-  "private": true,
-  "dependencies": {
-    "@types/graceful-fs": "^4.1.9"
   }
 }
