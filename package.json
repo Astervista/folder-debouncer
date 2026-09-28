@@ -1,6 +1,6 @@
 {
   "name": "folder-debouncer",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Rebuild when you say so: hold back autosaved edits from ng serve, tsc --watch and other watchers until you flush. macOS.",
   "keywords": [
     "autosave",
@@ -20,6 +20,13 @@
     "macos"
   ],
   "homepage": "https://debouncer.astervista.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Astervista/folder-debouncer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Astervista/folder-debouncer/issues"
+  },
   "license": "MIT",
   "author": "Astervista",
   "bin": {
