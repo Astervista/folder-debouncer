@@ -1,5 +1,5 @@
 import {readFileSync, statSync} from "node:fs";
-import {dirname, resolve} from "node:path";
+import {basename, dirname, resolve} from "node:path";
 import {isInside, realpathLoose} from "./paths.js";
 
 export const DEFAULT_CONFIG_FILE = "debouncer.json";
@@ -27,14 +27,19 @@ export class ConfigError extends Error {
     override name = "ConfigError";
 }
 
-export const CONFIG_TEMPLATE: ConfigJSON = {
-    $schema:        "https://unpkg.com/folder-debouncer/config.schema.json",
-    linkFolder:     ".",
-    outputFolder:   "../debounced-output",
-    watch:          ["dist"],
-    commitTriggers: ["dist/index.html"],
-    ignore:         []
-};
+export const FLUSH_FILE = ".debouncer-flush";
+
+/** A starter config for a project in `dir`: sources in src/ are held back, the mirror is a sibling folder. */
+export function configTemplate(dir: string): ConfigJSON {
+    return {
+        $schema:        "https://unpkg.com/folder-debouncer/config.schema.json",
+        linkFolder:     ".",
+        outputFolder:   `../${basename(dir)}-debounced`,
+        watch:          ["src"],
+        commitTriggers: [FLUSH_FILE],
+        ignore:         []
+    };
+}
 
 const KNOWN_KEYS = new Set(["$schema", "linkFolder", "watch", "commitTriggers", "ignore", "outputFolder"]);
 

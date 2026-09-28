@@ -1,21 +1,23 @@
 #!/usr/bin/env node
-import {existsSync, readFileSync, writeFileSync} from "node:fs";
-import {join, resolve} from "node:path";
-import {Config, CONFIG_TEMPLATE, ConfigError, DEFAULT_CONFIG_FILE, loadConfig} from "./config.js";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
+import {dirname, join, relative, resolve} from "node:path";
+import {Config, ConfigError, configTemplate, DEFAULT_CONFIG_FILE, FLUSH_FILE, loadConfig} from "./config.js";
 import {watch, WatcherInstance, WatchEventType} from "./file-watcher.js";
 import {Mirror} from "./mirror.js";
 import {Status, TerminalUI} from "./ui.js";
 
 const USAGE = `Usage: folder-debouncer [options] [config]
 
-Mirrors a folder into an output folder, holding back changes to watched paths
-until a commit trigger file changes.
+Rebuild when you say so. Mirrors your project into a second folder where your
+dev server or compiler runs; edits to watched sources reach it only when you
+flush, not on every autosave.
 
 Arguments:
   config               Path to the config file (default: ./${DEFAULT_CONFIG_FILE})
 
 Options:
   -c, --config <path>  Same as the config argument
+      --flush          Tell a running folder-debouncer to flush now (for IDE shortcuts)
       --init           Create a starter ${DEFAULT_CONFIG_FILE} in the current folder
   -h, --help           Show this help
   -v, --version        Show the version
@@ -33,8 +35,9 @@ function version(): string {
     return pkg.version;
 }
 
-function parseArgs(argv: string[]): { configPath: string } {
+function parseArgs(argv: string[]): { configPath: string, flush: boolean } {
     let configPath: string | null = null;
+    let flush                     = false;
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i]!;
         switch (arg) {
@@ -48,16 +51,13 @@ function parseArgs(argv: string[]): { configPath: string } {
                 process.stdout.write(`${version()}\n`);
                 process.exit(0);
                 break;
-            case "--init": {
-                const target = resolve(DEFAULT_CONFIG_FILE);
-                if (existsSync(target)) {
-                    fail(`${target} already exists.`);
-                }
-                writeFileSync(target, JSON.stringify(CONFIG_TEMPLATE, null, 2) + "\n");
-                process.stdout.write(`Created ${target}. Edit it, then run folder-debouncer.\n`);
+            case "--init":
+                init();
                 process.exit(0);
                 break;
-            }
+            case "--flush":
+                flush = true;
+                break;
             case "-c":
             case "--config": {
                 const value = argv[++i];
@@ -74,7 +74,42 @@ function parseArgs(argv: string[]): { configPath: string } {
                 configPath = arg;
         }
     }
-    return {configPath: configPath ?? DEFAULT_CONFIG_FILE};
+    return {configPath: configPath ?? DEFAULT_CONFIG_FILE, flush};
+}
+
+function init() {
+    const target = resolve(DEFAULT_CONFIG_FILE);
+    if (existsSync(target)) {
+        fail(`${target} already exists.`);
+    }
+    const template = configTemplate(process.cwd());
+    writeFileSync(target, JSON.stringify(template, null, 2) + "\n");
+    process.stdout.write(`Created ${target}
+
+Next steps:
+  1. Check the paths: "watch" lists the sources whose edits are held back.
+  2. Add ${FLUSH_FILE} to your .gitignore.
+  3. Run folder-debouncer, then start your dev server from ${resolve(template.outputFolder)}
+  4. Edit as usual. Press F in folder-debouncer, or run "folder-debouncer --flush"
+     (ideally from an IDE shortcut), to send your changes to the dev server.
+`);
+}
+
+/** Writes the first commit trigger, which makes a running instance flush. */
+function requestFlush(configPath: string) {
+    let config: Config;
+    try {
+        config = loadConfig(configPath);
+    } catch (e) {
+        fail((e as Error).message);
+    }
+    const trigger = config.commitTriggers[0];
+    if (trigger == null) {
+        fail(`--flush needs at least one entry in "commitTriggers" (for example "${FLUSH_FILE}").`);
+    }
+    mkdirSync(dirname(trigger), {recursive: true});
+    writeFileSync(trigger, `${new Date().toISOString()}\n`);
+    process.stdout.write(`Flush requested (${relative(process.cwd(), trigger) || trigger}).\n`);
 }
 
 // --- Session ---
@@ -263,7 +298,12 @@ function onKey(key: string) {
 }
 
 async function main() {
-    configPath = parseArgs(process.argv.slice(2)).configPath;
+    const args = parseArgs(process.argv.slice(2));
+    configPath = args.configPath;
+    if (args.flush) {
+        requestFlush(configPath);
+        return;
+    }
 
     if (process.platform !== "darwin") {
         fail("only macOS is supported (the watcher is built on FSEvents).");

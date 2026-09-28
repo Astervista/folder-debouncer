@@ -30,15 +30,16 @@ const ICONS: Record<LogType, string> = {
 const FIXED_DIFFERENCE = 5;
 const MAX_LOG_ENTRIES  = 5000;
 
-const TITLE     = "\x1B[1m\x1B[39mFolder Debouncer\x1B[22m is running. Press X to exit, H for help.";
+const TITLE     = "\x1B[1m\x1B[39mFolder Debouncer\x1B[22m is running. Press F to flush, H for help.";
 const HELP_HINT = "H for help";
 const LEGEND    = "Legend: \x1B[38;5;42m✶︎ Created  \x1B[38;5;208m✏︎ Modified  \x1B[38;5;208m⇋ Renamed  \x1B[38;5;197m✖︎ Deleted  \x1B[38;5;36m▼ Flushed  \x1B[38;5;45m⚙︎ Setup\x1B[0m";
 
 const HELP_TITLE = "\x1B[1m\x1B[38;5;75mFolder Debouncer\x1B[22m - Help\x1B[0m";
 const HELP_LINES = [
-    "This tool mirrors a folder into an output folder. Watched paths are copied, and changes to them are not " +
-    "mirrored in real time: they are collected and flushed all at once when a commit trigger file changes, or " +
-    "when you force a flush. Everything else is symlinked, so it is always up to date.",
+    "Your dev server or compiler runs in the output folder, a mirror of your project. Edits to watched sources " +
+    "are collected here instead of reaching it on every autosave, and are sent all at once when you flush: " +
+    "press F, or run \"folder-debouncer --flush\" (for example from an IDE shortcut). Everything else is " +
+    "symlinked, so it is always up to date.",
     "",
     "At any point, you can press one of the following keys to perform an action:",
     "",
