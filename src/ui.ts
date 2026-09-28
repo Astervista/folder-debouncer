@@ -38,7 +38,7 @@ const HELP_TITLE = "\x1B[1m\x1B[38;5;75mFolder Debouncer\x1B[22m - Help\x1B[0m";
 const HELP_LINES = [
     "Your dev server or compiler runs in the output folder, a mirror of your project. Edits to watched sources " +
     "are collected here instead of reaching it on every autosave, and are sent all at once when you flush: " +
-    "press F, or run \"folder-debouncer --flush\" (for example from an IDE shortcut). Everything else is " +
+    "press F, or run \"debouncer --flush\" (for example from an IDE shortcut). Everything else is " +
     "symlinked, so it is always up to date.",
     "",
     "At any point, you can press one of the following keys to perform an action:",

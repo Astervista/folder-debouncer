@@ -49,7 +49,7 @@
           }
         }
       ],
-      "description": "Files (relative to linkFolder) that flush all pending changes whenever they are created, modified or deleted. `folder-debouncer --flush` writes the first one."
+      "description": "Files (relative to linkFolder) that flush all pending changes whenever they are created, modified or deleted. `debouncer --flush` writes the first one."
     },
     "ignore": {
       "anyOf": [

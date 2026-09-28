@@ -21,7 +21,7 @@ echo 'export function greeting(name: string): string { return `Hi, ${name}`; }' 
 `tsc` stays quiet: the dashboard shows the changes as pending. Now flush:
 
 ```sh
-node ../../dist/index.js --flush ../debouncer.json    # or press F in the dashboard
+node ../../dist/index.js --flush ../debouncer.json    # "debouncer --flush" once installed; or press F
 ```
 
 `tsc` rebuilds once, with the final version. Restore the file with `git checkout example/project/src`.

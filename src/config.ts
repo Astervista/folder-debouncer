@@ -50,7 +50,7 @@ export function loadConfig(configPath: string): Config {
         text = readFileSync(absolutePath, "utf-8");
     } catch (e) {
         if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-            throw new ConfigError(`Config file not found: ${absolutePath}\nRun "folder-debouncer --init" to create one.`);
+            throw new ConfigError(`Config file not found: ${absolutePath}\nRun "debouncer --init" to create one.`);
         }
         throw new ConfigError(`Cannot read config file ${absolutePath}: ${(e as Error).message}`);
     }

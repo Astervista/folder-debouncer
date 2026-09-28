@@ -6,7 +6,7 @@ import {watch, WatcherInstance, WatchEventType} from "./file-watcher.js";
 import {Mirror} from "./mirror.js";
 import {Status, TerminalUI} from "./ui.js";
 
-const USAGE = `Usage: folder-debouncer [options] [config]
+const USAGE = `Usage: debouncer [options] [config]
 
 Rebuild when you say so. Mirrors your project into a second folder where your
 dev server or compiler runs; edits to watched sources reach it only when you
@@ -17,16 +17,16 @@ Arguments:
 
 Options:
   -c, --config <path>  Same as the config argument
-      --flush          Tell a running folder-debouncer to flush now (for IDE shortcuts)
+      --flush          Tell a running instance to flush now (for editor shortcuts)
       --init           Create a starter ${DEFAULT_CONFIG_FILE} in the current folder
   -h, --help           Show this help
   -v, --version        Show the version
 
 Keys while running: F flush, R restart, H help, X or Ctrl+C exit.
-Docs: https://www.npmjs.com/package/folder-debouncer`;
+Docs: https://debouncer.astervista.com`;
 
 function fail(message: string): never {
-    process.stderr.write(`folder-debouncer: ${message}\n`);
+    process.stderr.write(`debouncer: ${message}\n`);
     process.exit(1);
 }
 
@@ -69,7 +69,7 @@ function parseArgs(argv: string[]): { configPath: string, flush: boolean } {
             }
             default:
                 if (arg.startsWith("-") || configPath != null) {
-                    fail(`Unexpected argument "${arg}". Run folder-debouncer --help for usage.`);
+                    fail(`Unexpected argument "${arg}". Run debouncer --help for usage.`);
                 }
                 configPath = arg;
         }
@@ -89,8 +89,8 @@ function init() {
 Next steps:
   1. Check the paths: "watch" lists the sources whose edits are held back.
   2. Add ${FLUSH_FILE} to your .gitignore.
-  3. Run folder-debouncer, then start your dev server from ${resolve(template.outputFolder)}
-  4. Edit as usual. Press F in folder-debouncer, or run "folder-debouncer --flush"
+  3. Run debouncer, then start your dev server from ${resolve(template.outputFolder)}
+  4. Edit as usual. Press F in the dashboard, or run "debouncer --flush"
      (ideally from an IDE shortcut), to send your changes to the dev server.
 `);
 }
@@ -328,7 +328,7 @@ async function main() {
             // Best effort
         }
         ui.restore();
-        process.stderr.write(`folder-debouncer crashed: ${err instanceof Error ? err.stack : String(err)}\n`);
+        process.stderr.write(`debouncer crashed: ${err instanceof Error ? err.stack : String(err)}\n`);
         process.exit(1);
     };
     process.on("uncaughtException", crash);
@@ -338,7 +338,7 @@ async function main() {
     try {
         await start(configPath, true);
     } catch (e) {
-        shutdown(1, `folder-debouncer: ${(e as Error).message}`);
+        shutdown(1, `debouncer: ${(e as Error).message}`);
     }
 }
 

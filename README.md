@@ -6,7 +6,7 @@ Modern editors save as you type. `ng serve`, `tsc --watch`, webpack and friends 
 together and your compiler restarts on every keystroke: the fans spin up, the terminal fills with errors about code
 you haven't finished writing, and the browser reloads a half-written feature.
 
-`folder-debouncer` puts a gate between your editor and your watcher. Your dev server runs in a mirror of your
+folder-debouncer puts a gate between your editor and your watcher. Your dev server runs in a mirror of your
 project; your edits pile up in front of it, and reach it **all at once, when you flush**, with a key press or an
 editor shortcut. You keep autosave, you keep live reload, and you decide when a rebuild happens.
 
@@ -18,7 +18,7 @@ editor shortcut. You keep autosave, you keep live reload, and you decide when a 
    ├── angular.json  ── symlink ──┘        ├── angular.json
    └── .debouncer-flush                    └── ...
           ▲
-          └── folder-debouncer --flush   (bound to a key in your editor)
+          └── debouncer --flush   (bound to a key in your editor)
 ```
 
 > [!NOTE]
@@ -50,28 +50,30 @@ The usual answers don't quite work:
 | Stop and restart the dev server                      | Slow, and you lose incremental builds.                                                                          |
 | Tool-specific APIs                                   | Work for one bundler, need code, and `ng serve` / `tsc --watch` don't offer a manual mode.                      |
 
-`folder-debouncer` works with **any** watcher (Angular CLI, `tsc --watch`, webpack, esbuild, Vite, nodemon, test
+folder-debouncer works with **any** watcher (Angular CLI, `tsc --watch`, webpack, esbuild, Vite, nodemon, test
 runners in watch mode) because it doesn't touch the tool at all. It only controls what the tool gets to see.
 
 ## Install
 
 ```sh
-npm install --global folder-debouncer   # puts `folder-debouncer` on your PATH
+npm install --global folder-debouncer   # puts the `debouncer` command on your PATH
 ```
 
-Or try it without installing:
+Or try it first:
 
 ```sh
-npx folder-debouncer --help
+npx folder-debouncer --help   # without installing
 ```
 
-Requires macOS and Node.js 18 or newer.
+Requires macOS and Node.js 18 or newer. The command is `debouncer`; `folder-debouncer` works too.
+
+Website: [debouncer.astervista.com](https://debouncer.astervista.com)
 
 ## Quick start
 
 ```sh
 cd my-app
-folder-debouncer --init
+debouncer --init
 ```
 
 This writes a `debouncer.json` that holds back `src/` and mirrors the project into a sibling folder,
@@ -92,7 +94,7 @@ Then, in two terminals:
 
 ```sh
 # 1. Start the gate (it stays open as a small dashboard)
-folder-debouncer
+debouncer
 
 # 2. Run your dev server in the mirror, not in the project
 cd ../my-app-debounced
@@ -100,26 +102,26 @@ npx ng serve            # or: npx tsc --watch, npm run dev, ...
 ```
 
 Keep editing in `my-app` as usual. The dashboard counts the changes waiting at the gate. When you're ready,
-press <kbd>F</kbd> in the dashboard or run `folder-debouncer --flush` and your dev server rebuilds once, with
+press <kbd>F</kbd> in the dashboard or run `debouncer --flush` and your dev server rebuilds once, with
 everything.
 
 Add `.debouncer-flush` to your `.gitignore`.
 
 ## Flush from your editor
 
-Switching to a terminal to press <kbd>F</kbd> gets old quickly. Bind `folder-debouncer --flush` to a shortcut
+Switching to a terminal to press <kbd>F</kbd> gets old quickly. Bind `debouncer --flush` to a shortcut
 instead. It writes the commit trigger file, and the running instance flushes. A flush sends whatever is saved on
 disk; autosave normally has it there already, but if you trigger it right after typing, save first.
 
 ### WebStorm and other JetBrains IDEs
 
 1. **Settings | Tools | External Tools**, click **+**:
-   - **Name:** `Flush folder-debouncer`
-   - **Program:** `folder-debouncer` (or the full path from `which folder-debouncer` if the IDE can't find it)
+   - **Name:** `Flush debouncer`
+   - **Program:** `debouncer` (or the full path from `which debouncer` if the IDE can't find it)
    - **Arguments:** `--flush`
    - **Working directory:** `$ProjectFileDir$`
    - Under **Advanced Options**, clear **Open console for tool output** to keep it quiet.
-2. **Settings | Keymap**, find **External Tools | Flush folder-debouncer**, and add a shortcut, for example
+2. **Settings | Keymap**, find **External Tools | Flush debouncer**, and add a shortcut, for example
    <kbd>⌥</kbd><kbd>⌘</kbd><kbd>Enter</kbd>.
 
 ### VS Code
@@ -131,9 +133,9 @@ disk; autosave normally has it there already, but if you trigger it right after 
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Flush folder-debouncer",
+      "label": "Flush debouncer",
       "type": "shell",
-      "command": "folder-debouncer --flush",
+      "command": "debouncer --flush",
       "presentation": {"reveal": "never"},
       "problemMatcher": []
     }
@@ -147,18 +149,18 @@ disk; autosave normally has it there already, but if you trigger it right after 
 {
   "key": "alt+cmd+enter",
   "command": "workbench.action.tasks.runTask",
-  "args": "Flush folder-debouncer"
+  "args": "Flush debouncer"
 }
 ```
 
 ### Anything else
 
-Any tool that can run a command or write a file works: `folder-debouncer --flush`, or simply
+Any tool that can run a command or write a file works: `debouncer --flush`, or simply
 `touch .debouncer-flush`. A build script, a git hook or a Raycast/Alfred command can flush too.
 
 ## Configuration
 
-`debouncer.json` in the folder you run `folder-debouncer` from (or pass another path).
+`debouncer.json` in the folder you run `debouncer` from (or pass another path).
 
 | Option           | Required | Description                                                                                                            |
 |------------------|----------|------------------------------------------------------------------------------------------------------------------------|
@@ -183,11 +185,11 @@ always current. Only what you list in `watch` is gated.
 ## Command line and keys
 
 ```
-folder-debouncer [options] [config]
+debouncer [options] [config]
 
   config               Path to the config file (default: ./debouncer.json)
   -c, --config <path>  Same as the config argument
-      --flush          Tell a running folder-debouncer to flush now
+      --flush          Tell a running instance to flush now
       --init           Create a starter debouncer.json in the current folder
   -h, --help           Show help
   -v, --version        Show the version

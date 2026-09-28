@@ -4,30 +4,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>folder-debouncer</title>
 <meta name="description" content="Rebuild when you say so. Hold back autosaved edits from ng serve, tsc --watch and other watchers until you flush.">
+<link rel="canonical" href="https://debouncer.astervista.com/">
+<meta property="og:title" content="folder-debouncer: rebuild when you say so">
+<meta property="og:description" content="Hold back autosaved edits from ng serve, tsc --watch and other watchers until you flush.">
+<meta property="og:url" content="https://debouncer.astervista.com/">
+<meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&family=Schibsted+Grotesk:wght@600;700;800&display=swap">
 <style>
   :root {
     color-scheme: light;
-    --bg: #eceff2;
+    --bg: #f3f3f8;
     --surface: #ffffff;
-    --ink: #13171c;
-    --ink-soft: #3a424c;
-    --muted: #616b77;
-    --line: #d3d9df;
-    --pending: #c65a0e;
-    --pending-soft: #fbe7d6;
-    --flush: #00806a;
-    --flush-soft: #d5efe8;
-    --focus: #0a6cff;
+    --ink: #10121f;
+    --ink-soft: #363a4f;
+    --muted: #5d6179;
+    --line: #dcdde9;
+    --pending: #ff5a14;
+    --pending-ink: #c43d00;
+    --pending-soft: #ffe4d6;
+    --flush: #7fe03a;
+    --flush-ink: #3c7d00;
+    --flush-soft: #e5f8d5;
+    --on-accent: #10121f;
+    --focus: #c43d00;
 
     /* Terminal panes look like a terminal in both themes */
-    --term-bg: #101418;
-    --term-bar: #1a1f25;
-    --term-line: #2a3139;
-    --term-ink: #d9dee3;
-    --term-dim: #7d8793;
+    --term-bg: #0f111b;
+    --term-bar: #181b28;
+    --term-line: #282c3d;
+    --term-ink: #dcdfee;
+    --term-dim: #7e839c;
+    --term-tangerine: #ff6a2b;
+    --term-lime: #8ef04b;
     --term-orange: #ff8f3a;
     --term-teal: #1fc09a;
     --term-red: #ff5f7e;
@@ -44,38 +54,42 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
-      --bg: #0d1013;
-      --surface: #161a1f;
-      --ink: #e8ebee;
-      --ink-soft: #c3c9d0;
-      --muted: #8d97a2;
-      --line: #262c33;
-      --pending: #ff9447;
-      --pending-soft: #3a2413;
-      --flush: #2ccaa3;
-      --flush-soft: #10302a;
-      --focus: #5aa2ff;
-      --term-bg: #080a0c;
-      --term-bar: #121518;
-      --term-line: #22282e;
+      --bg: #0b0c14;
+      --surface: #141624;
+      --ink: #eceef8;
+      --ink-soft: #c4c7da;
+      --muted: #8a8ea9;
+      --line: #252839;
+      --pending: #ff6a2b;
+      --pending-ink: #ff8a57;
+      --pending-soft: #3a1a0c;
+      --flush: #8ef04b;
+      --flush-ink: #9ff266;
+      --flush-soft: #1c2d10;
+      --focus: #ff8a57;
+      --term-bg: #07080e;
+      --term-bar: #10121c;
+      --term-line: #222536;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #0d1013;
-    --surface: #161a1f;
-    --ink: #e8ebee;
-    --ink-soft: #c3c9d0;
-    --muted: #8d97a2;
-    --line: #262c33;
-    --pending: #ff9447;
-    --pending-soft: #3a2413;
-    --flush: #2ccaa3;
-    --flush-soft: #10302a;
-    --focus: #5aa2ff;
-    --term-bg: #080a0c;
-    --term-bar: #121518;
-    --term-line: #22282e;
+    --bg: #0b0c14;
+    --surface: #141624;
+    --ink: #eceef8;
+    --ink-soft: #c4c7da;
+    --muted: #8a8ea9;
+    --line: #252839;
+    --pending: #ff6a2b;
+    --pending-ink: #ff8a57;
+    --pending-soft: #3a1a0c;
+    --flush: #8ef04b;
+    --flush-ink: #9ff266;
+    --flush-soft: #1c2d10;
+    --focus: #ff8a57;
+    --term-bg: #07080e;
+    --term-bar: #10121c;
+    --term-line: #222536;
   }
 
   * { box-sizing: border-box; }
@@ -138,9 +152,14 @@
   .mark-gate i:nth-child(1) { height: 10px; }
   .mark-gate i:nth-child(2) { height: 16px; background: var(--ink); }
   .mark-gate i:nth-child(3) { height: 10px; background: var(--flush); }
+  .cmd .prompt { color: var(--term-tangerine); }
   .top nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
   .top nav a { text-decoration: none; }
   .top nav a:hover { color: var(--ink); }
+  .duo {
+    height: 6px;
+    background: linear-gradient(90deg, var(--pending) 0 50%, var(--flush) 50% 100%);
+  }
 
   /* --- Hero --- */
   .hero {
@@ -156,8 +175,16 @@
     line-height: 0.95;
     letter-spacing: -0.035em;
   }
-  .hero h1 .when { color: var(--pending); }
-  .hero h1 .you { color: var(--flush); }
+  .hero h1 .when, .hero h1 .you {
+    color: var(--on-accent);
+    padding: 0 0.08em;
+    margin: 0 -0.02em;
+    border-radius: 0.08em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .hero h1 .when { background: var(--pending); }
+  .hero h1 .you { background: var(--flush); }
   .lede { font-size: clamp(17px, 2.1vw, 20px); color: var(--ink-soft); max-width: 62ch; }
   .install {
     display: flex;
@@ -177,7 +204,7 @@
     font: 500 15px/1.2 var(--mono);
     overflow-x: auto;
   }
-  .cmd .prompt { color: var(--term-teal); user-select: none; }
+  .cmd .prompt { user-select: none; }
   .cmd code { white-space: nowrap; }
   .copy {
     flex: none;
@@ -231,15 +258,8 @@
     overflow-x: auto;
   }
   .ln { color: var(--muted); text-align: right; user-select: none; }
-  .tok-k { color: #8a3ffc; }
-  .tok-f { color: #0f62fe; }
-  .tok-t { color: var(--flush); }
-  :root[data-theme="dark"] .tok-k { color: #be95ff; }
-  :root[data-theme="dark"] .tok-f { color: #78a9ff; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .tok-k { color: #be95ff; }
-    :root:not([data-theme="light"]) .tok-f { color: #78a9ff; }
-  }
+  .tok-k { color: var(--pending-ink); }
+  .tok-f { color: var(--flush-ink); }
   .typing-line { display: flex; align-items: center; min-width: 0; }
   .typing-line .indent { white-space: pre; }
   #typed {
@@ -287,8 +307,8 @@
     color: var(--term-dim);
     white-space: nowrap;
   }
-  .pane-without .pane-head strong { color: var(--term-red); }
-  .pane-with .pane-head strong { color: var(--term-teal); }
+  .pane-without .pane-head strong { color: var(--term-ink); }
+  .pane-with .pane-head strong { color: var(--term-lime); }
   .log {
     height: 236px;
     margin: 0;
@@ -308,6 +328,8 @@
   .c-red { color: var(--term-red); }
   .c-green { color: var(--term-green); }
   .c-cyan { color: var(--term-cyan); }
+  .c-tangerine { color: var(--term-tangerine); }
+  .c-lime { color: var(--term-lime); }
   .pane-foot {
     display: flex;
     align-items: center;
@@ -318,16 +340,16 @@
     font: 500 12.5px/1.3 var(--mono);
     min-height: 52px;
   }
-  .status-pending { color: var(--term-orange); }
-  .status-idle { color: var(--term-green); }
+  .status-pending { color: var(--term-tangerine); }
+  .status-idle { color: var(--term-lime); }
   .status-busy { color: var(--term-red); }
   .flush-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     font: 700 13px/1 var(--mono);
-    color: #0b0f12;
-    background: var(--term-teal);
+    color: #10121f;
+    background: var(--term-lime);
     border: 0;
     border-radius: 7px;
     padding: 9px 12px;
@@ -337,7 +359,7 @@
   .flush-btn:disabled { background: var(--term-line); color: var(--term-dim); cursor: default; }
   .flush-btn kbd {
     background: transparent;
-    border-color: rgba(0, 0, 0, 0.25);
+    border-color: rgba(0, 0, 0, 0.3);
     color: inherit;
     font-size: 11px;
     padding: 1px 4px;
@@ -384,9 +406,9 @@
   .tree li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 6px; }
   .tree li .tag { font: 500 11px/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
   .tree li.gated { background: var(--pending-soft); }
-  .tree li.gated .tag { color: var(--pending); }
+  .tree li.gated .tag { color: var(--pending-ink); }
   .tree li.fresh { background: var(--flush-soft); }
-  .tree li.fresh .tag { color: var(--flush); }
+  .tree li.fresh .tag { color: var(--flush-ink); }
   .gate {
     display: grid;
     align-content: center;
@@ -402,8 +424,8 @@
   .gate-bars i:nth-child(1) { height: 30px; }
   .gate-bars i:nth-child(2) { height: 56px; background: var(--ink); }
   .gate-bars i:nth-child(3) { height: 30px; }
-  .gate .pending-chip { color: var(--pending); }
-  .gate .flush-chip { color: var(--flush); }
+  .gate .pending-chip { color: var(--pending-ink); }
+  .gate .flush-chip { color: var(--flush-ink); }
 
   /* Steps */
   .steps {
@@ -439,7 +461,6 @@
     white-space: pre;
   }
   .snippet .dim { color: var(--term-dim); }
-  .snippet .c-teal { color: var(--term-teal); }
 
   /* Editor tabs */
   .tabs { display: grid; gap: 16px; }
@@ -469,7 +490,7 @@
   td:first-child { font-weight: 600; white-space: nowrap; }
   td.no { color: var(--muted); }
   tr.us td { background: var(--flush-soft); }
-  tr.us td:first-child { color: var(--flush); }
+  tr.us td:first-child { color: var(--flush-ink); }
 
   /* Dashboard replica */
   .tui {
@@ -509,6 +530,7 @@
   }
 </style>
 
+<div class="duo" aria-hidden="true"></div>
 <header class="wrap top">
   <a class="mark" href="#top" aria-label="folder-debouncer home">
     <span class="mark-gate" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -536,7 +558,7 @@
           <code id="install-cmd">npm install -g folder-debouncer</code>
           <button class="copy" type="button" data-copy="install-cmd">Copy</button>
         </div>
-        <span class="meta">macOS · Node 18+ · MIT</span>
+        <span class="meta">Then run <code>debouncer</code> · macOS · Node 18+ · MIT</span>
       </div>
     </div>
 
@@ -573,11 +595,11 @@
         <div class="pane pane-with">
           <div class="pane-head"><strong>With folder-debouncer</strong><span class="count" id="count-with">tsc rebuilds: 0</span></div>
           <div class="log" id="log-with" aria-live="polite">
-            <span class="l"><span class="c-cyan">⚙︎</span> <span class="dim">2:49:01 PM:</span> Ready.</span>
-            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
-            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
-            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
-            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-lime">⚙︎</span> <span class="dim">2:49:01 PM:</span> Ready.</span>
+            <span class="l"><span class="c-tangerine">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-tangerine">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-tangerine">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-tangerine">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
           </div>
           <div class="pane-foot">
             <span class="status-pending" id="status-with">● Changes pending ✏︎ 7</span>
@@ -639,21 +661,21 @@
         <div class="step">
           <h3>Create the config</h3>
           <p>In your project. The default holds back <code>src/</code> and mirrors into a sibling folder.</p>
-          <pre class="snippet"><span class="c-teal">$</span> cd my-app
-<span class="c-teal">$</span> folder-debouncer --init
-<span class="c-teal">$</span> folder-debouncer</pre>
+          <pre class="snippet"><span class="c-tangerine">$</span> cd my-app
+<span class="c-tangerine">$</span> debouncer --init
+<span class="c-tangerine">$</span> debouncer</pre>
         </div>
         <div class="step">
           <h3>Run your dev server in the mirror</h3>
           <p>Any watcher works: the Angular CLI, <code>tsc --watch</code>, webpack, Vite, nodemon, test runners.</p>
-          <pre class="snippet"><span class="c-teal">$</span> cd ../my-app-debounced
-<span class="c-teal">$</span> npx ng serve
+          <pre class="snippet"><span class="c-tangerine">$</span> cd ../my-app-debounced
+<span class="c-tangerine">$</span> npx ng serve
 <span class="dim"># or npx tsc --watch, npm run dev…</span></pre>
         </div>
         <div class="step">
           <h3>Edit, then flush</h3>
           <p>Edit <code>my-app</code> as usual. When the change is ready, flush from a key in your editor, or press <kbd>F</kbd> in the dashboard.</p>
-          <pre class="snippet"><span class="c-teal">$</span> folder-debouncer --flush
+          <pre class="snippet"><span class="c-tangerine">$</span> debouncer --flush
 Flush requested (.debouncer-flush).</pre>
         </div>
       </div>
@@ -665,7 +687,7 @@ Flush requested (.debouncer-flush).</pre>
       <div class="block-head">
         <span class="eyebrow">Editor shortcuts</span>
         <h2>Flush without leaving your editor.</h2>
-        <p>Bind <code>folder-debouncer --flush</code> to a key. It writes the trigger file, and the running instance
+        <p>Bind <code>debouncer --flush</code> to a key. It writes the trigger file, and the running instance
           sends everything that is saved on disk.</p>
       </div>
       <div class="tabs">
@@ -677,22 +699,22 @@ Flush requested (.debouncer-flush).</pre>
         <div class="tabpanel" role="tabpanel" id="panel-jb" aria-labelledby="tab-jb">
           <ol>
             <li>Open <b>Settings | Tools | External Tools</b> and click <b>+</b>.</li>
-            <li>Set <b>Name</b> to <code>Flush folder-debouncer</code>, <b>Program</b> to <code>folder-debouncer</code>,
+            <li>Set <b>Name</b> to <code>Flush debouncer</code>, <b>Program</b> to <code>debouncer</code>,
               <b>Arguments</b> to <code>--flush</code> and <b>Working directory</b> to <code>$ProjectFileDir$</code>.
               Under <b>Advanced Options</b>, clear <b>Open console for tool output</b>.</li>
-            <li>In <b>Settings | Keymap</b>, find <b>External Tools | Flush folder-debouncer</b> and add a shortcut,
+            <li>In <b>Settings | Keymap</b>, find <b>External Tools | Flush debouncer</b> and add a shortcut,
               for example <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>↵</kbd>.</li>
           </ol>
-          <p class="note">If the IDE can't find the command, put the full path from <code>which folder-debouncer</code> in <b>Program</b>.</p>
+          <p class="note">If the IDE can't find the command, put the full path from <code>which debouncer</code> in <b>Program</b>.</p>
         </div>
         <div class="tabpanel" role="tabpanel" id="panel-vs" aria-labelledby="tab-vs" hidden>
           <p>Add a task in <code>.vscode/tasks.json</code>:</p>
           <pre class="snippet">{
   "version": "2.0.0",
   "tasks": [{
-    "label": "Flush folder-debouncer",
+    "label": "Flush debouncer",
     "type": "shell",
-    "command": "folder-debouncer --flush",
+    "command": "debouncer --flush",
     "presentation": {"reveal": "never"},
     "problemMatcher": []
   }]
@@ -701,15 +723,15 @@ Flush requested (.debouncer-flush).</pre>
           <pre class="snippet">{
   "key": "alt+cmd+enter",
   "command": "workbench.action.tasks.runTask",
-  "args": "Flush folder-debouncer"
+  "args": "Flush debouncer"
 }</pre>
         </div>
         <div class="tabpanel" role="tabpanel" id="panel-any" aria-labelledby="tab-any" hidden>
           <p>Anything that can run a command or touch a file can flush: a Raycast or Alfred command, a git hook, the end
             of a script.</p>
-          <pre class="snippet"><span class="c-teal">$</span> folder-debouncer --flush
+          <pre class="snippet"><span class="c-tangerine">$</span> debouncer --flush
 <span class="dim"># or, from the project folder</span>
-<span class="c-teal">$</span> touch .debouncer-flush</pre>
+<span class="c-tangerine">$</span> touch .debouncer-flush</pre>
         </div>
       </div>
     </div>
@@ -770,7 +792,7 @@ Flush requested (.debouncer-flush).</pre>
 <footer>
   <div class="wrap">
     <span>folder-debouncer · MIT license · macOS (FSEvents), Node.js 18+</span>
-    <span><a href="https://www.npmjs.com/package/folder-debouncer">npmjs.com/package/folder-debouncer</a></span>
+    <span><a href="https://debouncer.astervista.com">debouncer.astervista.com</a> · <a href="https://www.npmjs.com/package/folder-debouncer">npm</a></span>
   </div>
 </footer>
 
@@ -860,7 +882,7 @@ Flush requested (.debouncer-flush).</pre>
     }, 180);
 
     pending++;
-    push(logWith, `<span class="c-orange">✏︎</span> <span class="dim">${time()}:</span> src/greeting.ts`);
+    push(logWith, `<span class="c-tangerine">✏︎</span> <span class="dim">${time()}:</span> src/greeting.ts`);
     render();
   }
 
@@ -869,12 +891,12 @@ Flush requested (.debouncer-flush).</pre>
     const count = pending;
     pending = 0;
     rebuildsWith++;
-    push(logWith, `<span class="c-teal"> ▼</span> <span class="dim">${time()}:</span> Flushing ${count} change(s) (forced)...`);
-    push(logWith, `<span class="c-teal"> ▼</span> <span class="dim">${time()}:</span> Updated file src/greeting.ts`);
+    push(logWith, `<span class="c-lime"> ▼</span> <span class="dim">${time()}:</span> Flushing ${count} change(s) (forced)...`);
+    push(logWith, `<span class="c-lime"> ▼</span> <span class="dim">${time()}:</span> Updated file src/greeting.ts`);
     const error = compiles(input.value);
     push(logWith, error
       ? `<span class="dim">tsc:</span> <span class="c-red">${esc(error)}</span>`
-      : `<span class="dim">tsc:</span> <span class="c-green">Found 0 errors.</span> <span class="dim">(1 rebuild)</span>`);
+      : `<span class="dim">tsc:</span> <span class="c-lime">Found 0 errors.</span> <span class="dim">(1 rebuild)</span>`);
     render();
   }
 

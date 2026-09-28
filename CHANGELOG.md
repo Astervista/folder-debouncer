@@ -5,7 +5,7 @@
 First public release.
 
 ### Added
-- `folder-debouncer` command, usable with `npx` or a global install, with `--config`, `--init`, `--help` and `--version`.
+- `debouncer` command (also available as `folder-debouncer`), usable with `npx` or a global install, with `--config`, `--init`, `--help` and `--version`.
 - `--flush`, to flush a running instance from an editor shortcut or a script.
 - `--init` writes a config for the common setup: `src/` held back, mirror in a sibling folder, `.debouncer-flush` as
   the trigger.

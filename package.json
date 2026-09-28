@@ -19,9 +19,11 @@
     "cli",
     "macos"
   ],
+  "homepage": "https://debouncer.astervista.com",
   "license": "MIT",
   "author": "Astervista",
   "bin": {
+    "debouncer": "dist/index.js",
     "folder-debouncer": "dist/index.js"
   },
   "main": "dist/index.js",
