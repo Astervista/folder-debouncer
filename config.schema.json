@@ -16,12 +16,12 @@
     "linkFolder": {
       "type": "string",
       "minLength": 1,
-      "description": "The source folder to mirror. Relative paths are resolved from the folder containing this config file."
+      "description": "Your project: the folder you edit. Relative paths are resolved from the folder containing this config file."
     },
     "outputFolder": {
       "type": "string",
       "minLength": 1,
-      "description": "Where the mirror is created. Relative paths are resolved from the folder containing this config file. It must not overlap the link folder. Its contents are deleted on start (after asking) and the folder is removed on exit."
+      "description": "Where the mirror is created; run your dev server here. Relative paths are resolved from the folder containing this config file. It must not overlap the project. Its contents are deleted on start (after asking) and the mirror is removed on exit."
     },
     "watch": {
       "anyOf": [
@@ -35,7 +35,7 @@
           }
         }
       ],
-      "description": "Files or folders (relative to linkFolder) that are copied instead of symlinked. Changes to them are held back until a commit trigger changes or a flush is forced."
+      "description": "Files or folders (relative to linkFolder) whose edits are held back until a flush, usually your sources. They are copied into the mirror; everything else is symlinked."
     },
     "commitTriggers": {
       "anyOf": [
@@ -49,7 +49,7 @@
           }
         }
       ],
-      "description": "Files (relative to linkFolder) that flush all pending changes whenever they are created, modified or deleted."
+      "description": "Files (relative to linkFolder) that flush all pending changes whenever they are created, modified or deleted. `folder-debouncer --flush` writes the first one."
     },
     "ignore": {
       "anyOf": [

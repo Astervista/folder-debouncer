@@ -1,161 +1,285 @@
 # folder-debouncer
 
-Mirror a folder somewhere else, but **hold back changes until you say they are done**.
+**Rebuild when you say so.**
 
-Tools that watch a folder (dev servers, sync clients, file-based deploys, other watchers) often react to every
-single file write. When a build rewrites dozens of files, they see a half-written tree, reload several times, or
-crash on a missing chunk. `folder-debouncer` sits in between: it keeps a mirror of your project in which the build
-output only changes **all at once**, when a *commit trigger* file is written at the end of the build.
+Modern editors save as you type. `ng serve`, `tsc --watch`, webpack and friends rebuild on every save. Put the two
+together and your compiler restarts on every keystroke: the fans spin up, the terminal fills with errors about code
+you haven't finished writing, and the browser reloads a half-written feature.
+
+`folder-debouncer` puts a gate between your editor and your watcher. Your dev server runs in a mirror of your
+project; your edits pile up in front of it, and reach it **all at once, when you flush**, with a key press or an
+editor shortcut. You keep autosave, you keep live reload, and you decide when a rebuild happens.
 
 ```
- project/                     output folder
- ├── src/        ── symlink ─▶ src/            always live
- ├── package.json ─ symlink ─▶ package.json    always live
- └── dist/       ── copy ───▶ dist/           changes held back...
-     └── build-complete  ─────────────────────▶ ...until this file changes, then flushed at once
+   your project (you edit here)            mirror (your dev server runs here)
+   ├── src/          ── copied ───┐        ├── src/            ← only changes on flush
+   │    edits pile up here        │        │
+   ├── node_modules/ ── symlink ──┼──────▶ ├── node_modules/   ← always live
+   ├── angular.json  ── symlink ──┘        ├── angular.json
+   └── .debouncer-flush                    └── ...
+          ▲
+          └── folder-debouncer --flush   (bound to a key in your editor)
 ```
-
-- **Watched** paths are copied. Every change to them is snapshotted and queued, then applied in one go when a
-  commit trigger changes (or when you press <kbd>F</kbd>).
-- **Everything else** is symlinked, so it costs nothing and is always up to date.
-- **Ignored** paths are left out of the mirror.
-
-It runs as a small full-screen terminal app showing what is pending and what was flushed.
 
 > [!NOTE]
-> macOS only. File events come from FSEvents through a small native helper, which is bundled prebuilt
-> for Apple Silicon and Intel.
+> macOS only. File events come from FSEvents through a small native helper, bundled prebuilt for Apple Silicon
+> and Intel.
+
+## Contents
+
+- [Why](#why)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Flush from your editor](#flush-from-your-editor)
+- [Configuration](#configuration)
+- [Command line and keys](#command-line-and-keys)
+- [How it works](#how-it-works)
+- [Recipes](#recipes)
+- [Troubleshooting](#troubleshooting)
+- [Limitations](#limitations)
+- [Development](#development)
+
+## Why
+
+The usual answers don't quite work:
+
+| Workaround                                           | Problem                                                                                                         |
+|------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| Turn off autosave                                    | JetBrains IDEs can't fully turn it off: they still save when you switch windows, run, or use version control. And you lose autosave. |
+| Delay rebuilds (webpack `aggregateTimeout`, polling) | Only postpones the rebuild. Pause for a second mid-edit and it rebuilds anyway.                                 |
+| Stop and restart the dev server                      | Slow, and you lose incremental builds.                                                                          |
+| Tool-specific APIs                                   | Work for one bundler, need code, and `ng serve` / `tsc --watch` don't offer a manual mode.                      |
+
+`folder-debouncer` works with **any** watcher (Angular CLI, `tsc --watch`, webpack, esbuild, Vite, nodemon, test
+runners in watch mode) because it doesn't touch the tool at all. It only controls what the tool gets to see.
 
 ## Install
 
-Run it without installing:
+```sh
+npm install --global folder-debouncer   # puts `folder-debouncer` on your PATH
+```
+
+Or try it without installing:
 
 ```sh
-npx folder-debouncer
+npx folder-debouncer --help
 ```
 
-Or install it globally, which puts the `folder-debouncer` command on your `PATH`:
-
-```sh
-npm install --global folder-debouncer
-folder-debouncer --help
-```
-
-It can also be a dev dependency, run from an npm script:
-
-```sh
-npm install --save-dev folder-debouncer
-```
-
-```json
-{
-  "scripts": {
-    "debounce": "folder-debouncer"
-  }
-}
-```
-
-Requires Node.js 18 or newer.
+Requires macOS and Node.js 18 or newer.
 
 ## Quick start
 
 ```sh
-cd my-project
-folder-debouncer --init     # writes a starter debouncer.json
-# edit debouncer.json
-folder-debouncer            # reads ./debouncer.json
+cd my-app
+folder-debouncer --init
 ```
 
-Then point whatever consumes the files at the output folder, and make your build write the commit trigger file
-last (for example, `touch dist/build-complete` at the end of the build script).
-
-## Configuration
-
-`debouncer.json`:
+This writes a `debouncer.json` that holds back `src/` and mirrors the project into a sibling folder,
+`../my-app-debounced`:
 
 ```json
 {
   "$schema": "https://unpkg.com/folder-debouncer/config.schema.json",
   "linkFolder": ".",
-  "outputFolder": "../my-project-debounced",
-  "watch": ["dist"],
-  "commitTriggers": ["dist/build-complete"],
-  "ignore": [".git"]
+  "outputFolder": "../my-app-debounced",
+  "watch": ["src"],
+  "commitTriggers": [".debouncer-flush"],
+  "ignore": []
 }
 ```
 
-| Option           | Required | Description                                                                                                                  |
-|------------------|----------|------------------------------------------------------------------------------------------------------------------------------|
-| `linkFolder`     | yes      | The folder to mirror.                                                                                                        |
-| `outputFolder`   | yes      | Where the mirror is created. Must not be inside the link folder, nor contain it.                                             |
-| `watch`          | no       | Files or folders that are copied, with their changes held back until a flush.                                               |
-| `commitTriggers` | no       | Files that flush all pending changes whenever they are created, changed or deleted. They can be inside a watched folder or not. |
-| `ignore`         | no       | Files or folders left out of the mirror entirely.                                                                            |
+Then, in two terminals:
+
+```sh
+# 1. Start the gate (it stays open as a small dashboard)
+folder-debouncer
+
+# 2. Run your dev server in the mirror, not in the project
+cd ../my-app-debounced
+npx ng serve            # or: npx tsc --watch, npm run dev, ...
+```
+
+Keep editing in `my-app` as usual. The dashboard counts the changes waiting at the gate. When you're ready,
+press <kbd>F</kbd> in the dashboard or run `folder-debouncer --flush` and your dev server rebuilds once, with
+everything.
+
+Add `.debouncer-flush` to your `.gitignore`.
+
+## Flush from your editor
+
+Switching to a terminal to press <kbd>F</kbd> gets old quickly. Bind `folder-debouncer --flush` to a shortcut
+instead. It writes the commit trigger file, and the running instance flushes. A flush sends whatever is saved on
+disk; autosave normally has it there already, but if you trigger it right after typing, save first.
+
+### WebStorm and other JetBrains IDEs
+
+1. **Settings | Tools | External Tools**, click **+**:
+   - **Name:** `Flush folder-debouncer`
+   - **Program:** `folder-debouncer` (or the full path from `which folder-debouncer` if the IDE can't find it)
+   - **Arguments:** `--flush`
+   - **Working directory:** `$ProjectFileDir$`
+   - Under **Advanced Options**, clear **Open console for tool output** to keep it quiet.
+2. **Settings | Keymap**, find **External Tools | Flush folder-debouncer**, and add a shortcut, for example
+   <kbd>⌥</kbd><kbd>⌘</kbd><kbd>Enter</kbd>.
+
+### VS Code
+
+`.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flush folder-debouncer",
+      "type": "shell",
+      "command": "folder-debouncer --flush",
+      "presentation": {"reveal": "never"},
+      "problemMatcher": []
+    }
+  ]
+}
+```
+
+`keybindings.json` (**Preferences: Open Keyboard Shortcuts (JSON)**):
+
+```json
+{
+  "key": "alt+cmd+enter",
+  "command": "workbench.action.tasks.runTask",
+  "args": "Flush folder-debouncer"
+}
+```
+
+### Anything else
+
+Any tool that can run a command or write a file works: `folder-debouncer --flush`, or simply
+`touch .debouncer-flush`. A build script, a git hook or a Raycast/Alfred command can flush too.
+
+## Configuration
+
+`debouncer.json` in the folder you run `folder-debouncer` from (or pass another path).
+
+| Option           | Required | Description                                                                                                            |
+|------------------|----------|------------------------------------------------------------------------------------------------------------------------|
+| `linkFolder`     | yes      | Your project: the folder you edit.                                                                                     |
+| `outputFolder`   | yes      | Where the mirror is created; run your dev server here. It must not be inside the project, nor contain it.              |
+| `watch`          | no       | Files or folders whose edits are held back until a flush. They are copied into the mirror. Usually your sources.        |
+| `commitTriggers` | no       | Files that flush when they are created, changed or deleted. `--flush` writes the first one.                            |
+| `ignore`         | no       | Files or folders left out of the mirror entirely.                                                                      |
 
 `linkFolder` and `outputFolder` are relative to the config file; `watch`, `commitTriggers` and `ignore` are relative
-to `linkFolder`. Each of the last three accepts a single string or an array. The `$schema` line gives you
-autocompletion and validation in most editors.
+to `linkFolder`. The last three accept a single string or an array. The `$schema` line gives you autocompletion and
+validation in most editors.
+
+Everything that is not watched is **symlinked**, so `node_modules`, configs and assets cost nothing to mirror and are
+always current. Only what you list in `watch` is gated.
 
 > [!WARNING]
-> The output folder belongs to folder-debouncer. If it is not empty at startup you are asked before its contents
-> are deleted, and it is **deleted when folder-debouncer exits**. Don't point it at a folder you care about.
+> The mirror belongs to folder-debouncer. If the output folder is not empty at startup you are asked before its
+> contents are deleted, and the mirror is **deleted when folder-debouncer exits**. Never point `outputFolder` at a
+> folder you care about. Never edit files inside the mirror either: edit the project.
 
-## Usage
+## Command line and keys
 
 ```
 folder-debouncer [options] [config]
 
   config               Path to the config file (default: ./debouncer.json)
   -c, --config <path>  Same as the config argument
+      --flush          Tell a running folder-debouncer to flush now
       --init           Create a starter debouncer.json in the current folder
   -h, --help           Show help
   -v, --version        Show the version
 ```
 
-While it runs:
+While the dashboard is open:
 
-| Key                     | Action                                         |
-|-------------------------|------------------------------------------------|
-| <kbd>F</kbd>            | Flush pending changes now                      |
-| <kbd>R</kbd>            | Restart, reloading the config file             |
-| <kbd>↑</kbd> <kbd>↓</kbd>, mouse wheel | Scroll the log                  |
-| <kbd>H</kbd>            | Help                                           |
-| <kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd> | Exit and remove the output folder |
+| Key                                           | Action                                  |
+|-----------------------------------------------|-----------------------------------------|
+| <kbd>F</kbd>                                  | Flush: send the pending changes         |
+| <kbd>R</kbd>                                  | Restart, reloading `debouncer.json`     |
+| <kbd>↑</kbd> <kbd>↓</kbd> or the mouse wheel | Scroll the log                          |
+| <kbd>H</kbd>                                  | Help                                    |
+| <kbd>X</kbd> or <kbd>Ctrl</kbd>+<kbd>C</kbd>  | Exit (the mirror is removed)            |
+
+The status bar shows whether changes are pending, how many files were created, modified, renamed or deleted, and
+when the last change and the last flush happened.
 
 ## How it works
 
-On start, the link folder is mirrored into the output folder: watched paths are copied, the folders leading to
-them are recreated, and everything else is symlinked at the highest possible level.
+1. **Mirror.** On start, the project is recreated in the output folder: watched paths are copied, the folders
+   leading to them are recreated, and everything else becomes a symlink at the highest possible level.
+2. **Hold.** A native FSEvents watcher reports every change. For a watched file, a snapshot is taken immediately
+   and the change is queued; the mirror is not touched. Renames and moves are detected, including editors' atomic
+   saves, and moves to the Trash.
+3. **Flush.** When a commit trigger changes, the queue is applied to the mirror in order, in one burst. Your
+   dev server sees one batch of changes and rebuilds once.
 
-While running, a native FSEvents watcher reports changes:
+Outside watched paths nothing is held back: new or deleted files next to the mirrored folders are linked or
+unlinked right away, and everything deeper is already visible through a symlink.
 
-- Inside a **watched** path, each change is snapshotted to a private cache right away, so the state at the time of
-  the change is what gets flushed, and queued. Renames are detected and applied as moves.
-- **Outside** watched paths, additions and removals next to the mirrored folders are symlinked or unlinked
-  immediately. Anything deeper is already visible through a symlink.
-- When a **commit trigger** changes, the queue is applied to the output folder in order.
+## Recipes
+
+**Angular**
+
+```json
+{ "linkFolder": ".", "outputFolder": "../my-app-debounced", "watch": ["src"], "commitTriggers": [".debouncer-flush"] }
+```
+
+```sh
+cd ../my-app-debounced && npx ng serve
+```
+
+**TypeScript library or Node app**: the same config, then `npx tsc --watch` (or `nodemon`) in the mirror.
+
+**Monorepo package**: set `linkFolder` to the repository root so workspace links keep working, and `watch` to the
+package's sources, for example `"watch": ["packages/web/src"]`.
+
+**Hold back more than sources**: add anything the watcher reacts to, for example
+`"watch": ["src", "public", "tsconfig.json"]`.
+
+## Troubleshooting
+
+**The dev server doesn't rebuild after a flush.** Check that it runs in the mirror (`outputFolder`), not in your
+project. The dashboard log shows each file written on flush.
+
+**Module resolution errors in the mirror.** `node_modules` is a symlink to your project's copy. Most tools resolve
+it transparently. If one complains, try flipping its symlink setting: `preserveSymlinks` in TypeScript and
+`angular.json`, `resolve.preserveSymlinks` in Vite, `resolve.symlinks` in webpack.
+
+**My last keystroke is missing after a flush.** The flush sends what is saved on disk. Save before flushing, or let
+autosave catch up.
+
+**"Output folder is not empty. Delete its contents?"** Answer <kbd>N</kbd> if the folder isn't a previous mirror;
+nothing is touched and the program exits. Then pick another `outputFolder`.
+
+**The screen looks garbled after a crash.** Run `reset`. folder-debouncer restores the terminal on exit and on
+errors, but a `kill -9` can't be caught.
 
 ## Limitations
 
 - macOS only.
-- The mirror is one-way: changes made inside the output folder are not copied back, and may be overwritten.
-- Folders moved into a watched path are copied as they are at flush time, since their contents produce no events.
-- Mouse support is on so the wheel can scroll the log, which means most terminals need a modifier key to select text
-  (<kbd>Option</kbd> in iTerm2; check your terminal's settings).
+- One way: the mirror follows your project, never the other way round. Changes made inside the mirror are not
+  copied back and may be overwritten.
+- A folder moved into a watched path is copied as it is at flush time, since its contents produce no events of
+  their own.
+- The dashboard needs an interactive terminal. It captures the mouse so the wheel can scroll the log, so selecting
+  text usually needs a modifier key (<kbd>Option</kbd> in iTerm2; check your terminal's settings).
 
 ## Development
 
 ```sh
 npm install
-npm run build        # compiles TypeScript to dist/ and the native watcher to watcher/watcher
-npm test             # unit and integration tests (they create temporary folders and watch them)
-npm run example      # runs the example in example/
+npm run build        # TypeScript to dist/, native watcher to watcher/watcher
+npm test             # unit and integration tests (they create and watch temporary folders)
+npm run example      # the example in example/
 ```
 
-The native watcher needs the Xcode Command Line Tools (`xcode-select --install`). Published packages include
-it prebuilt, so users don't need them.
+The native watcher needs the Xcode Command Line Tools (`xcode-select --install`). Published packages include it
+prebuilt.
 
-To release: bump the version in `package.json`, update `CHANGELOG.md`, then `npm publish`. `prepack` rebuilds
+To release: bump `version` in `package.json`, update `CHANGELOG.md`, then `npm publish`. `prepack` rebuilds
 everything first.
 
 ## License

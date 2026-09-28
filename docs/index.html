@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>folder-debouncer</title>
+<meta name="description" content="Rebuild when you say so. Hold back autosaved edits from ng serve, tsc --watch and other watchers until you flush.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&family=Schibsted+Grotesk:wght@600;700;800&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eceff2;
+    --surface: #ffffff;
+    --ink: #13171c;
+    --ink-soft: #3a424c;
+    --muted: #616b77;
+    --line: #d3d9df;
+    --pending: #c65a0e;
+    --pending-soft: #fbe7d6;
+    --flush: #00806a;
+    --flush-soft: #d5efe8;
+    --focus: #0a6cff;
+
+    /* Terminal panes look like a terminal in both themes */
+    --term-bg: #101418;
+    --term-bar: #1a1f25;
+    --term-line: #2a3139;
+    --term-ink: #d9dee3;
+    --term-dim: #7d8793;
+    --term-orange: #ff8f3a;
+    --term-teal: #1fc09a;
+    --term-red: #ff5f7e;
+    --term-green: #4fd07a;
+    --term-cyan: #36c6ec;
+
+    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --radius: 10px;
+    --max: 1120px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d1013;
+      --surface: #161a1f;
+      --ink: #e8ebee;
+      --ink-soft: #c3c9d0;
+      --muted: #8d97a2;
+      --line: #262c33;
+      --pending: #ff9447;
+      --pending-soft: #3a2413;
+      --flush: #2ccaa3;
+      --flush-soft: #10302a;
+      --focus: #5aa2ff;
+      --term-bg: #080a0c;
+      --term-bar: #121518;
+      --term-line: #22282e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1013;
+    --surface: #161a1f;
+    --ink: #e8ebee;
+    --ink-soft: #c3c9d0;
+    --muted: #8d97a2;
+    --line: #262c33;
+    --pending: #ff9447;
+    --pending-soft: #3a2413;
+    --flush: #2ccaa3;
+    --flush-soft: #10302a;
+    --focus: #5aa2ff;
+    --term-bg: #080a0c;
+    --term-bar: #121518;
+    --term-line: #22282e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 16px/1.6 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding-inline: clamp(16px, 4vw, 40px);
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  code, kbd, pre { font-family: var(--mono); }
+  kbd {
+    font-size: 0.8em;
+    padding: 0.1em 0.45em;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .eyebrow {
+    font: 500 12px/1 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* --- Top bar --- */
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-block: 22px;
+  }
+  .mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font: 700 16px/1 var(--mono);
+    text-decoration: none;
+  }
+  .mark-gate {
+    display: inline-grid;
+    grid-template-columns: repeat(3, 4px);
+    gap: 3px;
+    align-items: end;
+  }
+  .mark-gate i { display: block; width: 4px; border-radius: 2px; background: var(--pending); }
+  .mark-gate i:nth-child(1) { height: 10px; }
+  .mark-gate i:nth-child(2) { height: 16px; background: var(--ink); }
+  .mark-gate i:nth-child(3) { height: 10px; background: var(--flush); }
+  .top nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+  .top nav a { text-decoration: none; }
+  .top nav a:hover { color: var(--ink); }
+
+  /* --- Hero --- */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding-block: 28px 64px;
+  }
+  .hero-copy { display: grid; gap: 22px; max-width: 760px; }
+  .hero h1 {
+    font-size: clamp(44px, 8vw, 92px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+  }
+  .hero h1 .when { color: var(--pending); }
+  .hero h1 .you { color: var(--flush); }
+  .lede { font-size: clamp(17px, 2.1vw, 20px); color: var(--ink-soft); max-width: 62ch; }
+  .install {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .cmd {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 100%;
+    padding: 12px 12px 12px 16px;
+    border-radius: var(--radius);
+    background: var(--term-bg);
+    color: var(--term-ink);
+    font: 500 15px/1.2 var(--mono);
+    overflow-x: auto;
+  }
+  .cmd .prompt { color: var(--term-teal); user-select: none; }
+  .cmd code { white-space: nowrap; }
+  .copy {
+    flex: none;
+    font: 500 12px/1 var(--mono);
+    color: var(--term-ink);
+    background: var(--term-bar);
+    border: 1px solid var(--term-line);
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+  }
+  .copy:hover { border-color: var(--term-dim); }
+  .meta { font-size: 14px; color: var(--muted); }
+
+  /* --- Demo --- */
+  .demo {
+    display: grid;
+    gap: 14px;
+  }
+  .editor {
+    display: grid;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .tabbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    font: 500 13px/1 var(--mono);
+    color: var(--muted);
+  }
+  .tabbar .file { color: var(--ink); }
+  .autosave { display: inline-flex; align-items: center; gap: 7px; }
+  .autosave .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.15s;
+  }
+  .autosave.saving .dot { background: var(--pending); }
+  .code {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 16px;
+    padding: 14px 16px;
+    font: 400 14px/1.75 var(--mono);
+    overflow-x: auto;
+  }
+  .ln { color: var(--muted); text-align: right; user-select: none; }
+  .tok-k { color: #8a3ffc; }
+  .tok-f { color: #0f62fe; }
+  .tok-t { color: var(--flush); }
+  :root[data-theme="dark"] .tok-k { color: #be95ff; }
+  :root[data-theme="dark"] .tok-f { color: #78a9ff; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tok-k { color: #be95ff; }
+    :root:not([data-theme="light"]) .tok-f { color: #78a9ff; }
+  }
+  .typing-line { display: flex; align-items: center; min-width: 0; }
+  .typing-line .indent { white-space: pre; }
+  #typed {
+    flex: 1;
+    min-width: 12ch;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    outline: none;
+    caret-color: var(--pending);
+  }
+  #typed:focus-visible { outline: none; }
+  .editor:focus-within { border-color: var(--pending); }
+  .hint { font-size: 13px; color: var(--muted); padding: 0 16px 12px; }
+
+  .panes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .pane {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-width: 0;
+    border-radius: var(--radius);
+    background: var(--term-bg);
+    color: var(--term-ink);
+    overflow: hidden;
+  }
+  .pane-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--term-bar);
+    font: 500 13px/1.3 var(--mono);
+  }
+  .pane-head strong { font-weight: 700; }
+  .pane-head .count {
+    font-variant-numeric: tabular-nums;
+    color: var(--term-dim);
+    white-space: nowrap;
+  }
+  .pane-without .pane-head strong { color: var(--term-red); }
+  .pane-with .pane-head strong { color: var(--term-teal); }
+  .log {
+    height: 236px;
+    margin: 0;
+    padding: 12px 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    font: 400 12.5px/1.7 var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .log .l { display: block; }
+  .dim { color: var(--term-dim); }
+  .c-orange { color: var(--term-orange); }
+  .c-teal { color: var(--term-teal); }
+  .c-red { color: var(--term-red); }
+  .c-green { color: var(--term-green); }
+  .c-cyan { color: var(--term-cyan); }
+  .pane-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px 10px 16px;
+    border-top: 1px solid var(--term-line);
+    font: 500 12.5px/1.3 var(--mono);
+    min-height: 52px;
+  }
+  .status-pending { color: var(--term-orange); }
+  .status-idle { color: var(--term-green); }
+  .status-busy { color: var(--term-red); }
+  .flush-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font: 700 13px/1 var(--mono);
+    color: #0b0f12;
+    background: var(--term-teal);
+    border: 0;
+    border-radius: 7px;
+    padding: 9px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .flush-btn:disabled { background: var(--term-line); color: var(--term-dim); cursor: default; }
+  .flush-btn kbd {
+    background: transparent;
+    border-color: rgba(0, 0, 0, 0.25);
+    color: inherit;
+    font-size: 11px;
+    padding: 1px 4px;
+  }
+  .flush-btn:disabled kbd { border-color: var(--term-line); }
+  .demo-controls { display: flex; justify-content: flex-end; }
+  .ghost {
+    font: 500 13px/1 var(--body);
+    color: var(--muted);
+    background: none;
+    border: 0;
+    padding: 6px 2px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .ghost:hover { color: var(--ink); }
+
+  /* --- Sections --- */
+  section.block { padding-block: 64px; border-top: 1px solid var(--line); }
+  .block-head { display: grid; gap: 12px; max-width: 680px; margin-bottom: 36px; }
+  .block-head h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .block-head p { color: var(--ink-soft); }
+
+  /* Mirror diagram */
+  .mirror {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+  .tree {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .tree h3 { font: 600 13px/1.3 var(--mono); color: var(--muted); }
+  .tree h3 b { color: var(--ink); font-weight: 700; }
+  .tree ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font: 400 14px/1.4 var(--mono); }
+  .tree li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 6px; }
+  .tree li .tag { font: 500 11px/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .tree li.gated { background: var(--pending-soft); }
+  .tree li.gated .tag { color: var(--pending); }
+  .tree li.fresh { background: var(--flush-soft); }
+  .tree li.fresh .tag { color: var(--flush); }
+  .gate {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 10px;
+    min-width: 120px;
+    font: 500 12px/1.4 var(--mono);
+    color: var(--muted);
+    text-align: center;
+  }
+  .gate-bars { display: flex; gap: 5px; align-items: end; height: 56px; }
+  .gate-bars i { display: block; width: 7px; border-radius: 3px; background: var(--line); }
+  .gate-bars i:nth-child(1) { height: 30px; }
+  .gate-bars i:nth-child(2) { height: 56px; background: var(--ink); }
+  .gate-bars i:nth-child(3) { height: 30px; }
+  .gate .pending-chip { color: var(--pending); }
+  .gate .flush-chip { color: var(--flush); }
+
+  /* Steps */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    counter-reset: step;
+  }
+  .step { display: grid; gap: 12px; align-content: start; }
+  .step h3 { font-size: 20px; font-weight: 700; display: flex; gap: 10px; align-items: baseline; }
+  .step h3::before {
+    counter-increment: step;
+    content: counter(step);
+    font: 700 14px/1 var(--mono);
+    color: var(--bg);
+    background: var(--ink);
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    transform: translateY(-2px);
+  }
+  .step p { color: var(--ink-soft); font-size: 15px; }
+  .snippet {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    background: var(--term-bg);
+    color: var(--term-ink);
+    font: 400 13px/1.7 var(--mono);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .snippet .dim { color: var(--term-dim); }
+  .snippet .c-teal { color: var(--term-teal); }
+
+  /* Editor tabs */
+  .tabs { display: grid; gap: 16px; }
+  .tablist { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tablist button {
+    font: 600 14px/1 var(--body);
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+  .tablist button[aria-selected="true"] { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+  .tabpanel { display: grid; gap: 16px; max-width: 820px; }
+  .tabpanel ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; color: var(--ink-soft); }
+  .tabpanel li b { color: var(--ink); font-weight: 600; }
+  .tabpanel code { font-size: 0.9em; }
+  .note { font-size: 14px; color: var(--muted); }
+
+  /* Comparison */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; font-size: 15px; }
+  th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  td.no { color: var(--muted); }
+  tr.us td { background: var(--flush-soft); }
+  tr.us td:first-child { color: var(--flush); }
+
+  /* Dashboard replica */
+  .tui {
+    border-radius: var(--radius);
+    background: var(--term-bg);
+    color: var(--term-ink);
+    font: 400 13px/1.75 var(--mono);
+    overflow-x: auto;
+  }
+  .tui-inner { min-width: 760px; }
+  .tui-row { display: flex; justify-content: space-between; gap: 20px; padding: 8px 16px; white-space: pre; }
+  .tui-top { background: var(--term-bar); }
+  .tui-top b { color: #fff; }
+  .tui-body { padding: 10px 16px; white-space: pre; }
+  .tui-bottom { border-top: 1px solid var(--term-line); }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--line); padding-block: 36px 48px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+  @media (max-width: 860px) {
+    .panes { grid-template-columns: minmax(0, 1fr); }
+    .steps { grid-template-columns: minmax(0, 1fr); }
+    .mirror { grid-template-columns: minmax(0, 1fr); }
+    .gate { grid-auto-flow: column; min-width: 0; }
+    .gate-bars { height: 36px; }
+    .gate-bars i:nth-child(2) { height: 36px; }
+    .gate-bars i:nth-child(1), .gate-bars i:nth-child(3) { height: 20px; }
+    .log { height: 180px; }
+  }
+  @media (max-width: 520px) {
+    .top nav { display: none; }
+    .pane-foot { flex-wrap: wrap; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<header class="wrap top">
+  <a class="mark" href="#top" aria-label="folder-debouncer home">
+    <span class="mark-gate" aria-hidden="true"><i></i><i></i><i></i></span>
+    folder-debouncer
+  </a>
+  <nav aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#setup">Setup</a>
+    <a href="#editors">Editor shortcuts</a>
+    <a href="https://www.npmjs.com/package/folder-debouncer">npm</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="wrap hero">
+    <div class="hero-copy">
+      <span class="eyebrow">For ng serve, tsc --watch, webpack, Vite…</span>
+      <h1>Rebuild <span class="when">when</span> <span class="you">you</span> say&nbsp;so.</h1>
+      <p class="lede">Your editor saves on every keystroke, so your watcher rebuilds on every keystroke.
+        folder-debouncer puts a gate in between: edits pile up in front of your dev server and reach it all at once,
+        when you press a key. Keep autosave. Keep live reload. Lose the rebuild storm.</p>
+      <div class="install">
+        <div class="cmd">
+          <span class="prompt" aria-hidden="true">$</span>
+          <code id="install-cmd">npm install -g folder-debouncer</code>
+          <button class="copy" type="button" data-copy="install-cmd">Copy</button>
+        </div>
+        <span class="meta">macOS · Node 18+ · MIT</span>
+      </div>
+    </div>
+
+    <div class="demo" aria-label="Interactive demo">
+      <div class="editor">
+        <div class="tabbar">
+          <span class="file">src/greeting.ts</span>
+          <span class="autosave" id="autosave"><span class="dot" aria-hidden="true"></span><span id="autosave-label">Autosave on</span></span>
+        </div>
+        <div class="code">
+          <span class="ln">1</span><span><span class="tok-k">export function</span> <span class="tok-f">greeting</span>(name: <span class="tok-k">string</span>): <span class="tok-k">string</span> {</span>
+          <span class="ln">2</span>
+          <label class="typing-line" for="typed"><span class="indent">    </span><input id="typed" type="text" spellcheck="false" autocomplete="off" aria-label="Type in the editor" value="return `Hello th"></label>
+          <span class="ln">3</span><span>}</span>
+        </div>
+        <p class="hint">Type here: every keystroke is saved, like in WebStorm.</p>
+      </div>
+
+      <div class="panes">
+        <div class="pane pane-without">
+          <div class="pane-head"><strong>Without</strong><span class="count" id="count-without">tsc rebuilds: 7</span></div>
+          <div class="log" id="log-without" aria-live="off">
+            <span class="l"><span class="dim">2:49:05 PM -</span> File change detected. Starting incremental compilation...</span>
+            <span class="l"><span class="c-red">src/greeting.ts(2,12): error TS1160: Unterminated template literal.</span></span>
+            <span class="l"><span class="dim">2:49:05 PM -</span> File change detected. Starting incremental compilation...</span>
+            <span class="l"><span class="c-red">src/greeting.ts(2,12): error TS1160: Unterminated template literal.</span></span>
+            <span class="l"><span class="dim">2:49:06 PM -</span> File change detected. Starting incremental compilation...</span>
+            <span class="l"><span class="c-red">src/greeting.ts(2,12): error TS1160: Unterminated template literal.</span></span>
+            <span class="l"><span class="dim">2:49:06 PM -</span> File change detected. Starting incremental compilation...</span>
+          </div>
+          <div class="pane-foot"><span class="status-busy" id="status-without">● Rebuilding on every keystroke</span></div>
+        </div>
+
+        <div class="pane pane-with">
+          <div class="pane-head"><strong>With folder-debouncer</strong><span class="count" id="count-with">tsc rebuilds: 0</span></div>
+          <div class="log" id="log-with" aria-live="polite">
+            <span class="l"><span class="c-cyan">⚙︎</span> <span class="dim">2:49:01 PM:</span> Ready.</span>
+            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:05 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
+            <span class="l"><span class="c-orange">✏︎</span> <span class="dim">2:49:06 PM:</span> src/greeting.ts</span>
+          </div>
+          <div class="pane-foot">
+            <span class="status-pending" id="status-with">● Changes pending ✏︎ 7</span>
+            <button class="flush-btn" id="flush" type="button">Flush <kbd>⌥⌘↵</kbd></button>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="ghost" id="replay" type="button">Replay the demo</button></div>
+    </div>
+  </section>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="block-head">
+        <span class="eyebrow">How it works</span>
+        <h2>Your dev server runs in a mirror. You hold the gate.</h2>
+        <p>On start, folder-debouncer mirrors your project into a second folder. The sources you choose are copied;
+          everything else, from <code>node_modules</code> to <code>angular.json</code>, is a symlink and always live.
+          Edits to the sources are snapshotted and queued, then written to the mirror in one burst when you flush.</p>
+      </div>
+      <div class="mirror">
+        <div class="tree">
+          <h3><b>my-app/</b> · you edit here</h3>
+          <ul>
+            <li class="gated"><span>src/</span><span class="tag">edits queue</span></li>
+            <li><span>node_modules/</span><span class="tag">linked</span></li>
+            <li><span>angular.json</span><span class="tag">linked</span></li>
+            <li><span>package.json</span><span class="tag">linked</span></li>
+            <li><span>.debouncer-flush</span><span class="tag">trigger</span></li>
+          </ul>
+        </div>
+        <div class="gate" aria-hidden="true">
+          <span class="pending-chip">✏︎ 7 pending</span>
+          <span class="gate-bars"><i></i><i></i><i></i></span>
+          <span class="flush-chip">▼ on flush</span>
+        </div>
+        <div class="tree">
+          <h3><b>my-app-debounced/</b> · ng serve runs here</h3>
+          <ul>
+            <li class="fresh"><span>src/</span><span class="tag">changes on flush</span></li>
+            <li><span>node_modules/</span><span class="tag">→ my-app</span></li>
+            <li><span>angular.json</span><span class="tag">→ my-app</span></li>
+            <li><span>package.json</span><span class="tag">→ my-app</span></li>
+            <li><span>.debouncer-flush</span><span class="tag">→ my-app</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="setup">
+    <div class="wrap">
+      <div class="block-head">
+        <span class="eyebrow">Setup</span>
+        <h2>Three steps, no changes to your build.</h2>
+        <p>It works with any watcher because it never touches the tool. It only controls what the tool gets to see.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3>Create the config</h3>
+          <p>In your project. The default holds back <code>src/</code> and mirrors into a sibling folder.</p>
+          <pre class="snippet"><span class="c-teal">$</span> cd my-app
+<span class="c-teal">$</span> folder-debouncer --init
+<span class="c-teal">$</span> folder-debouncer</pre>
+        </div>
+        <div class="step">
+          <h3>Run your dev server in the mirror</h3>
+          <p>Any watcher works: the Angular CLI, <code>tsc --watch</code>, webpack, Vite, nodemon, test runners.</p>
+          <pre class="snippet"><span class="c-teal">$</span> cd ../my-app-debounced
+<span class="c-teal">$</span> npx ng serve
+<span class="dim"># or npx tsc --watch, npm run dev…</span></pre>
+        </div>
+        <div class="step">
+          <h3>Edit, then flush</h3>
+          <p>Edit <code>my-app</code> as usual. When the change is ready, flush from a key in your editor, or press <kbd>F</kbd> in the dashboard.</p>
+          <pre class="snippet"><span class="c-teal">$</span> folder-debouncer --flush
+Flush requested (.debouncer-flush).</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="editors">
+    <div class="wrap">
+      <div class="block-head">
+        <span class="eyebrow">Editor shortcuts</span>
+        <h2>Flush without leaving your editor.</h2>
+        <p>Bind <code>folder-debouncer --flush</code> to a key. It writes the trigger file, and the running instance
+          sends everything that is saved on disk.</p>
+      </div>
+      <div class="tabs">
+        <div class="tablist" role="tablist" aria-label="Editor">
+          <button type="button" role="tab" id="tab-jb" aria-controls="panel-jb" aria-selected="true">WebStorm &amp; JetBrains</button>
+          <button type="button" role="tab" id="tab-vs" aria-controls="panel-vs" aria-selected="false" tabindex="-1">VS Code</button>
+          <button type="button" role="tab" id="tab-any" aria-controls="panel-any" aria-selected="false" tabindex="-1">Anything else</button>
+        </div>
+        <div class="tabpanel" role="tabpanel" id="panel-jb" aria-labelledby="tab-jb">
+          <ol>
+            <li>Open <b>Settings | Tools | External Tools</b> and click <b>+</b>.</li>
+            <li>Set <b>Name</b> to <code>Flush folder-debouncer</code>, <b>Program</b> to <code>folder-debouncer</code>,
+              <b>Arguments</b> to <code>--flush</code> and <b>Working directory</b> to <code>$ProjectFileDir$</code>.
+              Under <b>Advanced Options</b>, clear <b>Open console for tool output</b>.</li>
+            <li>In <b>Settings | Keymap</b>, find <b>External Tools | Flush folder-debouncer</b> and add a shortcut,
+              for example <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>↵</kbd>.</li>
+          </ol>
+          <p class="note">If the IDE can't find the command, put the full path from <code>which folder-debouncer</code> in <b>Program</b>.</p>
+        </div>
+        <div class="tabpanel" role="tabpanel" id="panel-vs" aria-labelledby="tab-vs" hidden>
+          <p>Add a task in <code>.vscode/tasks.json</code>:</p>
+          <pre class="snippet">{
+  "version": "2.0.0",
+  "tasks": [{
+    "label": "Flush folder-debouncer",
+    "type": "shell",
+    "command": "folder-debouncer --flush",
+    "presentation": {"reveal": "never"},
+    "problemMatcher": []
+  }]
+}</pre>
+          <p>Then bind it in <code>keybindings.json</code>:</p>
+          <pre class="snippet">{
+  "key": "alt+cmd+enter",
+  "command": "workbench.action.tasks.runTask",
+  "args": "Flush folder-debouncer"
+}</pre>
+        </div>
+        <div class="tabpanel" role="tabpanel" id="panel-any" aria-labelledby="tab-any" hidden>
+          <p>Anything that can run a command or touch a file can flush: a Raycast or Alfred command, a git hook, the end
+            of a script.</p>
+          <pre class="snippet"><span class="c-teal">$</span> folder-debouncer --flush
+<span class="dim"># or, from the project folder</span>
+<span class="c-teal">$</span> touch .debouncer-flush</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="why">
+    <div class="wrap">
+      <div class="block-head">
+        <span class="eyebrow">Why not just…</span>
+        <h2>The usual fixes only delay the problem.</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Approach</th><th scope="col">What goes wrong</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Turn off autosave</td><td class="no">JetBrains IDEs still save when you switch windows, run, or use version control. And you lose autosave.</td></tr>
+            <tr><td>Rebuild delays</td><td class="no">webpack's <code>aggregateTimeout</code> and polling only postpone the rebuild. Pause for a second mid-edit and it rebuilds anyway.</td></tr>
+            <tr><td>Restart the dev server</td><td class="no">Slow, and you lose incremental builds.</td></tr>
+            <tr><td>Tool-specific APIs</td><td class="no">One bundler at a time, and <code>ng serve</code> and <code>tsc --watch</code> have no manual mode.</td></tr>
+            <tr class="us"><td>folder-debouncer</td><td>Works with any watcher, keeps autosave and live reload, and rebuilds exactly when you flush.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="dashboard">
+    <div class="wrap">
+      <div class="block-head">
+        <span class="eyebrow">The dashboard</span>
+        <h2>See what's waiting at the gate.</h2>
+        <p>A small full-screen terminal app shows every queued change, every flush, and the state of the gate.
+          <kbd>F</kbd> flushes, <kbd>R</kbd> reloads the config, <kbd>H</kbd> shows help.</p>
+      </div>
+      <div class="tui" role="img" aria-label="The folder-debouncer terminal dashboard with three pending changes">
+        <div class="tui-inner">
+          <div class="tui-row tui-top"><span><b>Folder Debouncer</b> is running. Press F to flush, H for help.</span><span>Legend: <span class="c-green">✶︎ Created</span>  <span class="c-orange">✏︎ Modified</span>  <span class="c-orange">⇋ Renamed</span>  <span class="c-red">✖︎ Deleted</span>  <span class="c-teal">▼ Flushed</span></span></div>
+<div class="tui-body"><span class="c-cyan">⚙︎</span> <span class="dim">2:48:57 PM:</span> Watching /Users/you/dev/my-app
+<span class="c-cyan">⚙︎</span> <span class="dim">2:48:57 PM:</span> Mirrored /Users/you/dev/my-app: 212 copied, 14 symlinked.
+<span class="c-cyan">⚙︎</span> <span class="dim">2:48:57 PM:</span> Ready.
+<span class="c-orange">✏︎</span> <span class="dim">2:51:12 PM:</span> src/app/cart/cart.component.ts
+<span class="c-orange">✏︎</span> <span class="dim">2:51:14 PM:</span> src/app/cart/cart.component.html
+<span class="c-teal"> ▼</span> <span class="dim">2:51:20 PM:</span> Commit trigger: .debouncer-flush
+<span class="c-teal"> ▼</span> <span class="dim">2:51:20 PM:</span> Flushing 2 change(s) (commit trigger)...
+<span class="c-teal"> ▼</span> <span class="dim">2:51:20 PM:</span> Flush finished.
+<span class="c-green">✶︎</span> <span class="dim">2:53:02 PM:</span> src/app/cart/cart.service.spec.ts
+<span class="c-orange">✏︎</span> <span class="dim">2:53:09 PM:</span> src/app/cart/cart.service.ts
+<span class="c-orange">⇋</span> <span class="dim">2:53:31 PM:</span> src/app/cart/total.pipe.ts ⇋ src/app/cart/cart-total.pipe.ts</div>
+          <div class="tui-row tui-bottom"><span>Status: <b class="c-orange">● Changes pending</b></span><span><span class="c-green">✶︎ 1</span> | <span class="c-orange">⇋ 1</span> | <span class="c-orange">✏︎ 1</span> | ⏲: <span class="c-orange">✏︎ 2:53:31 PM</span> - <span class="c-teal">▼ 2:51:20 PM</span></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>folder-debouncer · MIT license · macOS (FSEvents), Node.js 18+</span>
+    <span><a href="https://www.npmjs.com/package/folder-debouncer">npmjs.com/package/folder-debouncer</a></span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const TARGET = "return `Hello there, ${name}!`;";
+  const START = "return `Hello th";
+  const MAX_LINES = 14;
+
+  const input = document.getElementById("typed");
+  const logWithout = document.getElementById("log-without");
+  const logWith = document.getElementById("log-with");
+  const countWithout = document.getElementById("count-without");
+  const countWith = document.getElementById("count-with");
+  const statusWithout = document.getElementById("status-without");
+  const statusWith = document.getElementById("status-with");
+  const flushBtn = document.getElementById("flush");
+  const autosave = document.getElementById("autosave");
+  const autosaveLabel = document.getElementById("autosave-label");
+  const replay = document.getElementById("replay");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // The at-rest state matches the static markup
+  let rebuildsWithout = 7;
+  let rebuildsWith = 0;
+  let pending = 7;
+  let autoplay = null;
+  let saveTimer = null;
+  let compileTimer = null;
+
+  const time = () => new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit", second: "2-digit"});
+  const esc = s => s.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"})[c]);
+
+  function push(log, html) {
+    const line = document.createElement("span");
+    line.className = "l";
+    line.innerHTML = html;
+    log.appendChild(line);
+    while (log.children.length > MAX_LINES) {
+      log.removeChild(log.firstElementChild);
+    }
+  }
+
+  // A crude check, good enough to tell whether tsc would be happy with the line
+  function compiles(text) {
+    const ticks = (text.match(/`/g) || []).length;
+    if (ticks % 2 !== 0) return "error TS1160: Unterminated template literal.";
+    if ((text.match(/\$\{/g) || []).length !== (text.match(/\}/g) || []).length) return "error TS1005: '}' expected.";
+    if (!/;\s*$/.test(text)) return "error TS1005: ';' expected.";
+    return null;
+  }
+
+  function render() {
+    countWithout.textContent = `tsc rebuilds: ${rebuildsWithout}`;
+    countWith.textContent = `tsc rebuilds: ${rebuildsWith}`;
+    if (pending > 0) {
+      statusWith.className = "status-pending";
+      statusWith.textContent = `● Changes pending ✏︎ ${pending}`;
+    } else {
+      statusWith.className = "status-idle";
+      statusWith.textContent = "● No changes";
+    }
+    flushBtn.disabled = pending === 0;
+  }
+
+  // Every keystroke is an autosave
+  function onSave() {
+    const text = input.value;
+    autosave.classList.add("saving");
+    autosaveLabel.textContent = "Saved";
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      autosave.classList.remove("saving");
+      autosaveLabel.textContent = "Autosave on";
+    }, 400);
+
+    rebuildsWithout++;
+    statusWithout.className = "status-busy";
+    statusWithout.textContent = "● Rebuilding on every keystroke";
+    push(logWithout, `<span class="dim">${time()} -</span> File change detected. Starting incremental compilation...`);
+    clearTimeout(compileTimer);
+    compileTimer = setTimeout(() => {
+      const error = compiles(text);
+      push(logWithout, error
+        ? `<span class="c-red">src/greeting.ts(2,12): ${esc(error)}</span>`
+        : `<span class="dim">${time()} -</span> <span class="c-green">Found 0 errors.</span> Watching for file changes.`);
+    }, 180);
+
+    pending++;
+    push(logWith, `<span class="c-orange">✏︎</span> <span class="dim">${time()}:</span> src/greeting.ts`);
+    render();
+  }
+
+  function flush() {
+    if (pending === 0) return;
+    const count = pending;
+    pending = 0;
+    rebuildsWith++;
+    push(logWith, `<span class="c-teal"> ▼</span> <span class="dim">${time()}:</span> Flushing ${count} change(s) (forced)...`);
+    push(logWith, `<span class="c-teal"> ▼</span> <span class="dim">${time()}:</span> Updated file src/greeting.ts`);
+    const error = compiles(input.value);
+    push(logWith, error
+      ? `<span class="dim">tsc:</span> <span class="c-red">${esc(error)}</span>`
+      : `<span class="dim">tsc:</span> <span class="c-green">Found 0 errors.</span> <span class="dim">(1 rebuild)</span>`);
+    render();
+  }
+
+  function stopAutoplay() {
+    if (autoplay) {
+      clearInterval(autoplay);
+      autoplay = null;
+    }
+  }
+
+  function play() {
+    stopAutoplay();
+    input.value = START;
+    let i = START.length;
+    autoplay = setInterval(() => {
+      if (i >= TARGET.length) {
+        stopAutoplay();
+        setTimeout(flush, 700);
+        return;
+      }
+      input.value = TARGET.slice(0, ++i);
+      onSave();
+    }, 170);
+  }
+
+  input.addEventListener("input", () => {
+    stopAutoplay();
+    onSave();
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.altKey && e.metaKey) {
+      e.preventDefault();
+      flush();
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.altKey && e.metaKey && e.target !== input) {
+      e.preventDefault();
+      flush();
+    }
+  });
+  flushBtn.addEventListener("click", () => {
+    stopAutoplay();
+    flush();
+  });
+  replay.addEventListener("click", play);
+
+  render();
+  if (!reducedMotion) {
+    setTimeout(() => { if (input.value === START && document.activeElement !== input) play(); }, 1200);
+  }
+
+  // Copy buttons
+  document.querySelectorAll("[data-copy]").forEach(button => {
+    button.addEventListener("click", () => {
+      const source = document.getElementById(button.dataset.copy);
+      const done = () => {
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = "Copy"; }, 1500);
+      };
+      const select = () => {
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(source.textContent).then(done, select);
+      } else {
+        select();
+      }
+    });
+  });
+
+  // Tabs
+  const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+  function selectTab(tab) {
+    tabs.forEach(t => {
+      const selected = t === tab;
+      t.setAttribute("aria-selected", String(selected));
+      t.tabIndex = selected ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !selected;
+    });
+    tab.focus();
+  }
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => selectTab(tab));
+    tab.addEventListener("keydown", e => {
+      if (e.key === "ArrowRight") selectTab(tabs[(index + 1) % tabs.length]);
+      if (e.key === "ArrowLeft") selectTab(tabs[(index - 1 + tabs.length) % tabs.length]);
+    });
+  });
+})();
+</script>
+</html>

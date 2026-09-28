@@ -6,10 +6,15 @@ First public release.
 
 ### Added
 - `folder-debouncer` command, usable with `npx` or a global install, with `--config`, `--init`, `--help` and `--version`.
+- `--flush`, to flush a running instance from an editor shortcut or a script.
+- `--init` writes a config for the common setup: `src/` held back, mirror in a sibling folder, `.debouncer-flush` as
+  the trigger.
+- The watcher reports it is ready only once FSEvents is delivering events, so edits made right after startup are
+  no longer missed.
 - The native watcher ships prebuilt as a universal binary (Apple Silicon and Intel).
 - Restart (<kbd>R</kbd>) reloads the config file.
 - Clear errors for invalid configs, a missing config, unsupported platforms and non-interactive terminals.
-- README, example project, tests and CI.
+- README with editor shortcut recipes, a landing page, an example project, tests and CI.
 
 ### Fixed
 - Answering **N** to "delete the output folder contents?" deleted them anyway.

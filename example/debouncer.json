@@ -1,0 +1,7 @@
+{
+  "$schema": "../config.schema.json",
+  "linkFolder": "project",
+  "outputFolder": "/tmp/folder-debouncer-example",
+  "watch": ["src"],
+  "commitTriggers": [".debouncer-flush"]
+}
