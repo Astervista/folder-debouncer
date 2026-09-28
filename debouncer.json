@@ -1,0 +1,13 @@
+{
+  "linkFolder": "test-dir",
+  "watch": [
+    "trigger.txt",
+    "watching"
+  ],
+  "commitTriggers": [
+    "trigger.txt"
+  ],
+  "outputFolder": "/tmp/angular-debouncer/debouncer-test/",
+  "ignore": [
+  ]
+}
