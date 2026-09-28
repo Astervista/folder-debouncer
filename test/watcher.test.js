@@ -3,7 +3,7 @@ const assert = require("node:assert");
 const {mkdirSync, writeFileSync, renameSync, rmSync, appendFileSync} = require("node:fs");
 const {join} = require("node:path");
 const {watch, parseWatcherLine, splitEscaped} = require("../dist/file-watcher.js");
-const {tempDir, sleep, waitFor, WATCHER_WARMUP} = require("./helpers.js");
+const {tempDir, sleep, waitFor, FIXTURE_SETTLE} = require("./helpers.js");
 
 test("splitEscaped honours escaped delimiters", () => {
     assert.deepStrictEqual(splitEscaped("CF|/a\\|b|/c\\\\d"), ["CF", "/a|b", "/c\\d"]);
@@ -25,12 +25,12 @@ test("the native watcher reports creates, modifies, renames and deletes", async 
     writeFileSync(join(dir, "outside", "moved", "inner.txt"), "x");
     writeFileSync(join(root, "a", "existing.txt"), "x");
     
+    await sleep(FIXTURE_SETTLE);
     const watcher = await watch(root, {ignored: [join(root, "ignored")]});
     t.after(() => watcher.close());
     const events = [];
     watcher.listen((type, fileType, path, oldPath) => events.push({type, fileType, path, oldPath}));
     const has = (type, path, oldPath) => events.some(e => e.type === type && e.path === path && (oldPath == null || e.oldPath === oldPath));
-    await sleep(WATCHER_WARMUP);
     
     writeFileSync(join(root, "a", "new.txt"), "1");
     await waitFor(() => has("C", join(root, "a", "new.txt")), "create");

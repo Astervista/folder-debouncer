@@ -1,8 +1,0 @@
-{
-  "$schema": "../config.schema.json",
-  "linkFolder": "project",
-  "outputFolder": "/tmp/folder-debouncer-example",
-  "watch": ["dist"],
-  "commitTriggers": ["dist/build-complete"],
-  "ignore": ["notes"]
-}

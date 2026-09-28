@@ -3,7 +3,7 @@
  *
  * Usage: watcher <dir> [--ignore <path>]... [--track <path>]...
  *
- * Prints "START" once the stream is running, then one line per event:
+ * Prints "START" once the stream is delivering events, then one line per event:
  *
  *   <events><type>|<path>[|<old path>]
  *
@@ -31,6 +31,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 typedef struct {
     dev_t dev;
@@ -56,6 +57,9 @@ static size_t inode_cache_len = 0;
 static size_t inode_cache_cap = 0;
 
 static FSEventStreamRef g_stream = NULL;
+static char g_root[PATH_MAX];
+static bool g_started = false;
+static dispatch_source_t g_probe_timer = NULL;
 
 static void *xrealloc(void *ptr, size_t size) {
     void *result = realloc(ptr, size);
@@ -366,6 +370,30 @@ typedef struct {
     FSEventStreamEventFlags flags;
 } vanished_t;
 
+/* Prints START once the stream is known to deliver events. */
+static void announce_start(void) {
+    if (g_started) {
+        return;
+    }
+    g_started = true;
+    if (g_probe_timer) {
+        dispatch_source_cancel(g_probe_timer);
+    }
+    printf("START\n");
+    fflush(stdout);
+}
+
+/* A new FSEvents stream can drop events for a moment after it starts. To know when it is live, rewrite the
+ * root folder's timestamps with their current values: nothing changes on disk, but an event is emitted. */
+static void probe_stream(void) {
+    struct stat st;
+    if (lstat(g_root, &st) != 0) {
+        return;
+    }
+    struct timespec times[2] = { st.st_atimespec, st.st_mtimespec };
+    utimensat(AT_FDCWD, g_root, times, AT_SYMLINK_NOFOLLOW);
+}
+
 static void event_callback(
     ConstFSEventStreamRef streamRef,
     void *clientCallBackInfo,
@@ -375,6 +403,9 @@ static void event_callback(
     const FSEventStreamEventId eventIds[])
 {
     char **paths = eventPaths;
+
+    // Any event proves the stream is live
+    announce_start();
 
     // Paths that were renamed away. FSEvents reports both ends of a rename as
     // separate events, usually in the same batch; whatever is not claimed by
@@ -388,7 +419,8 @@ static void event_callback(
         const char *path = paths[i];
         FSEventStreamEventFlags flags = eventFlags[i];
 
-        if (is_ignored(path)) {
+        // Events on the root itself carry no information (and include our own probes)
+        if (is_ignored(path) || strcmp(path, g_root) == 0) {
             continue;
         }
 
@@ -490,7 +522,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char watch_root[PATH_MAX];
+    char *watch_root = g_root;
     if (!realpath(argv[1], watch_root)) {
         fprintf(stderr, "Cannot watch %s: ", argv[1]);
         perror(NULL);
@@ -559,8 +591,18 @@ int main(int argc, char *argv[]) {
     });
     dispatch_resume(stdin_source);
 
-    printf("START\n");
-    fflush(stdout);
+    // Probe every 250ms until the stream answers; after 5 seconds, start anyway
+    __block int probes = 0;
+    g_probe_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+    dispatch_source_set_timer(g_probe_timer, dispatch_time(DISPATCH_TIME_NOW, 0), 250 * NSEC_PER_MSEC, 50 * NSEC_PER_MSEC);
+    dispatch_source_set_event_handler(g_probe_timer, ^{
+        if (++probes > 20) {
+            announce_start();
+        } else {
+            probe_stream();
+        }
+    });
+    dispatch_resume(g_probe_timer);
 
     // Blocks forever, handled by GCD
     dispatch_main();

@@ -5,7 +5,7 @@ const {join} = require("node:path");
 const {parseConfig} = require("../dist/config.js");
 const {Mirror} = require("../dist/mirror.js");
 const {watch} = require("../dist/file-watcher.js");
-const {tempDir, sleep, waitFor, WATCHER_WARMUP} = require("./helpers.js");
+const {tempDir, sleep, waitFor, FIXTURE_SETTLE} = require("./helpers.js");
 
 /**
  * project/
@@ -41,14 +41,12 @@ async function setup(t, {startWatcher = true} = {}) {
     assert.ok(await mirror.prepareOutput(async () => assert.fail("should not ask for an empty output")));
     let watcher = null;
     if (startWatcher) {
+        await sleep(FIXTURE_SETTLE);
         watcher = await watch(config.linkFolder, {ignored: config.ignore, tracked: config.watch});
         t.after(() => watcher.close());
         watcher.listen((...args) => mirror.handleEvent(...args));
     }
     mirror.initialMirror();
-    if (startWatcher) {
-        await sleep(WATCHER_WARMUP);
-    }
     return {dir, project, out: join(dir, "out"), mirror, logs};
 }
 

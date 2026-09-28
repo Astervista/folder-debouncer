@@ -22,7 +22,8 @@ async function waitFor(predicate, message, timeout = 5000) {
     }
 }
 
-// FSEvents may drop events from the first moments of a new stream
-const WATCHER_WARMUP = 1500;
+// FSEvents can deliver events for files written just before a stream started. Tests let their fixtures age this
+// long before watching, so those late events are not mistaken for the change under test.
+const FIXTURE_SETTLE = 1500;
 
-module.exports = {tempDir, sleep, waitFor, WATCHER_WARMUP};
+module.exports = {tempDir, sleep, waitFor, FIXTURE_SETTLE};
