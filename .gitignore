@@ -2,6 +2,7 @@
 /dist
 /watcher/watcher
 /watcher/cmake-build-*/
+/watcher/.idea/
 *.tgz
 
 # Dependencies
