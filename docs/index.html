@@ -27,7 +27,8 @@
     --flush: #7fe03a;
     --flush-ink: #3c7d00;
     --flush-soft: #e5f8d5;
-    --on-accent: #10121f;
+    --pending-display: #e84a00;
+    --flush-display: #2b8f00;
     --focus: #c43d00;
 
     /* Terminal panes look like a terminal in both themes */
@@ -63,6 +64,8 @@
       --pending: #ff6a2b;
       --pending-ink: #ff8a57;
       --pending-soft: #3a1a0c;
+      --pending-display: #ff6a2b;
+      --flush-display: #8ef04b;
       --flush: #8ef04b;
       --flush-ink: #9ff266;
       --flush-soft: #1c2d10;
@@ -83,6 +86,8 @@
     --pending: #ff6a2b;
     --pending-ink: #ff8a57;
     --pending-soft: #3a1a0c;
+    --pending-display: #ff6a2b;
+    --flush-display: #8ef04b;
     --flush: #8ef04b;
     --flush-ink: #9ff266;
     --flush-soft: #1c2d10;
@@ -175,16 +180,8 @@
     line-height: 0.95;
     letter-spacing: -0.035em;
   }
-  .hero h1 .when, .hero h1 .you {
-    color: var(--on-accent);
-    padding: 0 0.08em;
-    margin: 0 -0.02em;
-    border-radius: 0.08em;
-    -webkit-box-decoration-break: clone;
-    box-decoration-break: clone;
-  }
-  .hero h1 .when { background: var(--pending); }
-  .hero h1 .you { background: var(--flush); }
+  .hero h1 .when { color: var(--pending-display); }
+  .hero h1 .you { color: var(--flush-display); }
   .lede { font-size: clamp(17px, 2.1vw, 20px); color: var(--ink-soft); max-width: 62ch; }
   .install {
     display: flex;
